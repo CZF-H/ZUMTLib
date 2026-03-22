@@ -108,7 +108,49 @@ namespace ZUMTLib {
         using E = DOUBLE;
     }
     
-    static bool ReadBuffer(Address_t addr, void* buffer, size_t size) {
+    pid_t GetPid() noexcept {
+        return getpid();
+    }
+    
+    struct Proc_t {
+        pid_t pid;
+        std::string maps;
+        std::string cmdline;
+        
+        Proc_t() :
+            pid(GetPid()),
+            maps(self_maps),
+            cmdline(self_maps)
+        {}
+        
+        Proc_t(const pid_t& _pid) {
+            static const std::string _proc = "/proc/";
+            static const std::string _maps = "/maps";
+            static const std::string _cmdline = "/cmdline";
+            if (pid != _pid) {
+                pid = _pid;
+                const std::string _pid_str = std::to_string(pid);
+                {
+                    ((maps = _proc) += _pid_str) += _maps;
+                    ((cmdline = _proc) += _pid_str) += _cmdline;
+                }
+            }
+        }
+    };
+    
+    struct ProcBasedClass {
+    protected:
+        Proc_t* m_proc{};
+    public:
+        void ChangeProc(Proc_t* proc = nullptr) noexcept {
+            m_proc = proc;
+        }
+        ZUMTLib_NODISCARD Proc_t* Proc() const noexcept {
+            return m_proc;
+        }
+    };
+    
+    static bool ReadBuffer(Address_t addr, void* buffer, size_t size) noexcept {
         iovec local{};
         iovec remote{};
         
@@ -134,56 +176,57 @@ namespace ZUMTLib {
     private:
         Address_t local;
     public:
-        explicit PtrLow(Address_t address) {
+        explicit PtrLow(Address_t address) noexcept {
             Address_t value = 0;
             ReadBuffer(address, &value, ZUMTLib_PTR_BYTE);
             local = value & ((1ULL << bit) - 1);
         }
     private:
-        explicit PtrLow(Address_t value, bool is_value) {
+        explicit PtrLow(Address_t value, bool is_value) noexcept {
             local = value & ((1ULL << bit) - 1);
         }
     
     public:
-        PtrLow Next(Offset_t offset = 0) const {
+        PtrLow Next(Offset_t offset = 0) const noexcept {
             Address_t addr = (local & ((1ULL << bit) - 1)) + offset;
             Address_t value = 0;
             ReadBuffer(addr, &value, ZUMTLib_PTR_BYTE);
             return PtrLow<bit>(value, true);
         }
         
-        PtrLow& ToNext(Offset_t offset = 0) {
+        PtrLow& ToNext(Offset_t offset = 0) noexcept {
             local = Next(offset).value();
             return *this;
         }
         
-        PtrLow Offset(Offset_t offset) const {
+        PtrLow Offset(Offset_t offset) const noexcept {
             PtrLow<bit> result = *this;
             result.local += offset;
             return result;
         }
         
-        PtrLow operator+(Offset_t offset) const { return Offset(offset); }
-        PtrLow& operator+=(Offset_t offset) {
+        PtrLow operator+(Offset_t offset) const noexcept { return Offset(offset); }
+        PtrLow& operator+=(Offset_t offset) noexcept {
             this->local += offset;
             return *this;
         }
-        PtrLow operator-(Offset_t offset) const { return Offset(-offset); }
+        PtrLow operator-(Offset_t offset) const noexcept { return Offset(-offset); }
         PtrLow& operator-=(Offset_t offset) {
             this->local -= offset;
             return *this;
         }
         
-        PtrLow operator>>(Offset_t offset) const { return Next(offset); }
+        PtrLow operator>>(Offset_t offset) const noexcept { return Next(offset); }
         PtrLow& operator>>=(Offset_t offset) {
             ToNext(offset);
             return *this;
         }
-        PtrLow operator()(Offset_t offset) const { return Next(offset); }
+        PtrLow operator()(Offset_t offset) const noexcept { return Next(offset); }
         
-        ZUMTLib_NODISCARD Address_t value() const { return local; }
-        ZUMTLib_NODISCARD Address_t operator*() const { return value(); }
-        explicit operator Address_t() const { return value(); }
+        ZUMTLib_NODISCARD Address_t value() const noexcept { return local; }
+        ZUMTLib_NODISCARD bool empty() const noexcept { return local == 0; }
+        ZUMTLib_NODISCARD Address_t operator*() const noexcept { return value(); }
+        explicit operator Address_t() const noexcept { return value(); }
     };
     
     #ifdef ZUMTLib_CAN_64_BIT
@@ -213,12 +256,12 @@ namespace ZUMTLib {
         return ps > 0 ? ps : 4096; // fallback
     }
     
-    Prot_t ParsePerm(const String_t& in) {
+    Prot_t ParsePerm(const String_t& in) noexcept {
         Prot_t res = 0;
         if (!in.empty()) {
-            if (in[0] == 'r') res |= PROT_READ;
-            if (in[1] == 'w') res |= PROT_WRITE;
-            if (in[2] == 'x') res |= PROT_EXEC;
+            if (/*in.size() >= 1 &&*/ in[0] == 'r') res |= PROT_READ;
+            if (  in.size() >= 2 &&   in[1] == 'w') res |= PROT_WRITE;
+            if (  in.size() >= 3 &&   in[2] == 'x') res |= PROT_EXEC;
         }
         return res;
     }
@@ -232,7 +275,7 @@ namespace ZUMTLib {
         String_t perm;
     };
     
-    class ProtGuard {
+    class ProtGuard : ProcBasedClass {
     private:
         void* m_addr{};
         size_t m_size{};
@@ -243,7 +286,7 @@ namespace ZUMTLib {
         
         void RefreshTbl() {
             m_tbl.clear();
-            std::ifstream maps(self_maps);
+            std::ifstream maps(m_proc ? m_proc->maps : self_maps);
             if (!maps.is_open()) return;
             
             String_t line;
@@ -275,19 +318,20 @@ namespace ZUMTLib {
         }
     
     public:
-        ProtGuard() = default;
+        ProtGuard() noexcept = default;
         
-        void operator()(void* addr, size_t sz, Prot_t prot) noexcept {
+        void operator()(void* addr, size_t sz, Prot_t prot, Proc_t* proc = nullptr) noexcept {
             m_addr = addr;
             m_size = sz;
             m_orig = prot;
+            m_proc = proc;
         }
         
-        ProtGuard(void* addr, size_t sz, Prot_t prot) noexcept {
-            (*this)(addr, sz, prot);
+        ProtGuard(void* addr, size_t sz, Prot_t prot, Proc_t* proc = nullptr) noexcept {
+            (*this)(addr, sz, prot, proc);
         }
         
-        void operator()(void* addr, size_t sz) noexcept {
+        void operator()(void* addr, size_t sz, Proc_t* proc = nullptr) noexcept {
             if (!addr || sz == 0) return;
             
             long ps = sysconf(_SC_PAGESIZE);
@@ -317,12 +361,11 @@ namespace ZUMTLib {
             return mprotect(m_addr, m_size, prot) == 0;
         }
         
-        // 手动刷新缓存
         void RefreshTblManual() {
             RefreshTbl();
         }
         
-        ProtGuard(const ProtGuard&) = delete;
+        ProtGuard(const ProtGuard&)  = delete;
         ProtGuard& operator=(const ProtGuard&) = delete;
         
         ProtGuard(ProtGuard&& other) noexcept
@@ -394,7 +437,7 @@ namespace ZUMTLib {
             return true;
         }
         
-        bool read(void* buffer, const std::size_t length) const {
+        bool read(void* buffer, const std::size_t length) const noexcept {
             if (!m_addr || !buffer || length == 0) return false;
             
             std::memcpy(buffer, ptr(), length);
@@ -402,36 +445,36 @@ namespace ZUMTLib {
         }
         
         template<typename _Ty, std::size_t _Sz = sizeof(_Ty)> // NOLINT(*-reserved-identifier)
-        bool writeType(const _Ty& value) const {
+        bool writeType(const _Ty& value) const noexcept {
             return write(&value, _Sz);
         }
         
         template<typename _Ty, std::size_t _Sz = sizeof(_Ty)> // NOLINT(*-reserved-identifier)
-        bool writeTypeGuard(const _Ty& value) const {
+        bool writeTypeGuard(const _Ty& value) const noexcept {
             return writeGuard(&value, _Sz);
         }
         
         template<typename _Ty, std::size_t _Sz = sizeof(_Ty)> // NOLINT(*-reserved-identifier)
-        _Ty readType() const {
+        _Ty readType() const noexcept {
             _Ty result{};
             read(reinterpret_cast<void*>(&result), _Sz);
             return result;
         }
         
         template<typename _Ty, std::size_t _Sz = sizeof(_Ty)> // NOLINT(*-reserved-identifier)
-        bool readType(_Ty* value) const {
+        bool readType(_Ty* value) const noexcept {
             return read(reinterpret_cast<void*>(value), _Sz);
         }
         
-        ZUMTLib_NODISCARD base_type address() const {
+        ZUMTLib_NODISCARD base_type address() const noexcept {
             return m_addr;
         }
         
-        ZUMTLib_NODISCARD void* ptr() const {
+        ZUMTLib_NODISCARD void* ptr() const noexcept {
             return reinterpret_cast<void*>(m_addr);
         }
         
-        operator base_type() const {
+        operator base_type() const noexcept {
             return address();
         }
         
@@ -500,7 +543,7 @@ namespace ZUMTLib {
         Addr end;
     };
     
-    class Module {
+    class Module : ProcBasedClass {
         String_t m_name;
         AddrRange m_range;
         String_t m_perms;
@@ -509,15 +552,15 @@ namespace ZUMTLib {
         Inode_t m_inode{};
         String_t m_path;
     public:
-        Module* Self() {
+        Module* Self() noexcept {
             return this;
         }
         
         Module() = default;
         
-        const Module& Scan(const String_t& targetName, bool merge = false) {
+        const Module& Scan(const String_t& targetName, bool merge = false) noexcept {
             try {
-                std::ifstream maps(self_maps);
+                std::ifstream maps(m_proc ? m_proc->maps : self_maps);
                 String_t line;
                 Addr firstStart;
                 bool firstFound = false;
@@ -560,16 +603,17 @@ namespace ZUMTLib {
                         }
                     }
                 }
-            } catch (...) {
-            }
+            } catch (...) {}
             return *this;
         }
         
-        explicit Module(const String_t& targetName, bool merge = false) {
+        explicit Module(const String_t& targetName, Proc_t* proc = nullptr, bool merge = false) noexcept {
+            m_proc = proc;
             Scan(targetName, merge);
         }
         
-        void operator()(const String_t& targetName, bool merge = false) {
+        void operator()(const String_t& targetName, Proc_t* proc = nullptr, bool merge = false) noexcept {
+            m_proc = proc;
             Scan(targetName, merge);
         }
         
@@ -580,14 +624,17 @@ namespace ZUMTLib {
             const Offset_t offset,
             String_t dev,
             const Inode_t inode,
-            String_t path
-        ) : m_name(std::move(name)),
-            m_range(range),
-            m_perms(std::move(perms)),
-            m_offset(offset),
-            m_dev(std::move(dev)),
-            m_inode(inode),
-            m_path(std::move(path)) {}
+            String_t path,
+            Proc_t* proc = nullptr
+        ) noexcept : m_name(std::move(name)),
+                     m_range(range),
+                     m_perms(std::move(perms)),
+                     m_offset(offset),
+                     m_dev(std::move(dev)),
+                     m_inode(inode),
+                     m_path(std::move(path)) {
+            m_proc = proc;
+        }
         
         void operator()(
             String_t name = {},
@@ -595,49 +642,51 @@ namespace ZUMTLib {
             String_t perms = {},
             Offset_t offset = {},
             String_t dev = {},
-            String_t path = {}
-        ) {
+            String_t path = {},
+            Proc_t* proc = {}
+        ) noexcept {
             m_name = std::move(name);
             m_range = range;
             m_perms = std::move(perms);
             m_offset = offset;
             m_dev = std::move(dev);
             m_path = std::move(path);
+            m_proc = proc;
         }
         
-        String_t& name() {
+        String_t& name() noexcept {
             return m_name;
         }
         
-        AddrRange& range() {
+        AddrRange& range() noexcept {
             return m_range;
         }
         
-        String_t& perms() {
+        String_t& perms() noexcept {
             return m_perms;
         }
         
-        Offset_t& offset() {
+        Offset_t& offset() noexcept {
             return m_offset;
         }
         
-        String_t& dev() {
+        String_t& dev() noexcept {
             return m_dev;
         }
         
-        Inode_t& inode() {
+        Inode_t& inode() noexcept {
             return m_inode;
         }
         
-        String_t& path() {
+        String_t& path() noexcept {
             return m_path;
         }
     };
     
     using ModuleList = std::vector<Module>;
     
-    inline ModuleList GetModuleList(bool merge = false) {
-        std::ifstream maps(self_maps);
+    inline ModuleList GetModuleList(bool merge = false, Proc_t* proc = {}) {
+        std::ifstream maps(proc ? proc->maps : self_maps);
         String_t line;
         ModuleList modules;
         
@@ -712,9 +761,9 @@ namespace ZUMTLib {
     
     using MapRegions = std::vector<MapRegion>;
     
-    inline MapRegions ParseMaps() {
+    inline MapRegions ParseMaps(Proc_t* proc = {}) {
         MapRegions regions;
-        std::ifstream ifs(self_maps);
+        std::ifstream ifs(proc ? proc->maps : self_maps);
         String_t line;
         
         while (std::getline(ifs, line)) {
@@ -799,7 +848,7 @@ namespace ZUMTLib {
         return true;
     }
     
-    inline bool IsPtrValid(void* ptr, size_t size = 1) {
+    inline bool IsPtrValid(void* ptr, size_t size = 1) noexcept {
         if (!ptr) return false;
         
         const auto start = reinterpret_cast<Address_t>(ptr);
@@ -817,13 +866,13 @@ namespace ZUMTLib {
         return true;
     }
     
-    inline bool IsSafeAddress(Address_t addr, size_t size) {
+    inline bool IsSafeAddress(Address_t addr, size_t size) noexcept {
         if (addr <= 0x10000000 || addr >= 0x10000000000) return false;
         return IsPtrValid(reinterpret_cast<void*>(addr), size);
     }
     
-    inline bool IsLibraryLoaded(const String_t& name) {
-        std::ifstream mapsFile(self_maps);
+    inline bool IsLibraryLoaded(const String_t& name, Proc_t* proc = {}) {
+        std::ifstream mapsFile(proc ? proc->maps : self_maps);
         if (!mapsFile.is_open()) return false;
         String_t line;
         while (std::getline(mapsFile, line))
@@ -832,8 +881,8 @@ namespace ZUMTLib {
     }
     
     
-    inline Address_t GetModuleBase(String_t name) {
-        std::ifstream maps(self_maps);
+    inline Address_t GetModuleBase(String_t name, Proc_t* proc = {}) {
+        std::ifstream maps(proc ? proc->maps : self_maps);
         if (!maps.is_open()) {
             return 0;
         }
@@ -858,7 +907,16 @@ namespace ZUMTLib {
             Inode_t inode;
             Offset_t offset;
             
-            if (!(iss >> addressRange >> perms >> std::hex >> offset >> dev >> inode))
+            if (!(iss >> addressRange >> perms)) // string
+                continue;
+            
+            if (!(iss >> std::hex >> offset)) // hex
+                continue;
+            
+            if (!(iss >> dev)) // string
+                continue;
+            
+            if (!(iss >> std::dec >> inode)) // dec
                 continue;
             
             auto dashPos = addressRange.find('-');
@@ -885,8 +943,8 @@ namespace ZUMTLib {
         return result;
     }
     
-    inline Address_t GetModuleEnd(String_t name) {
-        std::ifstream maps(self_maps);
+    inline Address_t GetModuleEnd(String_t name, Proc_t* proc = {}) {
+        std::ifstream maps(proc ? proc->maps : self_maps);
         if (!maps.is_open()) {
             return 0;
         }
@@ -910,7 +968,16 @@ namespace ZUMTLib {
             Inode_t inode;
             Offset_t offset;
             
-            if (!(iss >> addressRange >> perms >> std::hex >> offset >> dev >> inode))
+            if (!(iss >> addressRange >> perms)) // string
+                continue;
+            
+            if (!(iss >> std::hex >> offset)) // hex
+                continue;
+            
+            if (!(iss >> dev)) // string
+                continue;
+            
+            if (!(iss >> std::dec >> inode)) // dec
                 continue;
             
             auto dashPos = addressRange.find('-');
@@ -993,8 +1060,8 @@ namespace ZUMTLib {
         return true;
     }
     
-    inline String_t ReadCmdlineName(bool stop_at_colon = false) {
-        std::ifstream f(self_cmdline, std::ios::in | std::ios::binary);
+    inline String_t ReadCmdlineName(bool stop_at_colon = false,  Proc_t* proc = {}) {
+        std::ifstream f(proc ? proc->cmdline : self_cmdline, std::ios::in | std::ios::binary);
         if (!f.is_open()) {
             return {};
         }
