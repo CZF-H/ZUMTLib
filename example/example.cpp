@@ -1,10 +1,10 @@
 #include <iostream>
-#include <MemoryToolsCPP.hpp>
+#include <ZUMTLib.hpp>
 
 int main() {
     int aalll
     int val = 0;
-    MemoryTools::Addr val_addr(&val);
+    ZUMTLib::Addr val_addr(&val);
 
     std::cout << static_cast<uintptr_t>(val_addr) << std::endl;
 
