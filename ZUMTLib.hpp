@@ -854,11 +854,11 @@ namespace ZUMTLib {
         const auto start = reinterpret_cast<Address_t>(ptr);
         const auto end = start + size;
         
-        static const size_t PAGE_SIZE = sysconf(_SC_PAGESIZE);
+        static const std::size_t page_size = sysconf(_SC_PAGESIZE);
         
-        for (Address_t page = start & ~(PAGE_SIZE - 1); page < end; page += PAGE_SIZE) {
+        for (Address_t page = start & ~(page_size - 1); page < end; page += page_size) {
             unsigned char vec;
-            const int ret = mincore(reinterpret_cast<void*>(page), PAGE_SIZE, &vec);
+            const int ret = mincore(reinterpret_cast<void*>(page), page_size, &vec);
             if (ret != 0 || (vec & 1) == 0) {
                 return false;
             }
