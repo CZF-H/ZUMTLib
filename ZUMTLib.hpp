@@ -334,8 +334,7 @@ namespace ZUMTLib {
         void operator()(void* addr, size_t sz, Proc_t* proc = nullptr) noexcept {
             if (!addr || sz == 0) return;
             
-            long ps = sysconf(_SC_PAGESIZE);
-            if (ps <= 0) ps = 4096;
+            long ps = PageSize();
             
             auto start = reinterpret_cast<Address_t>(addr) & ~(ps - 1);
             auto end   = (reinterpret_cast<Address_t>(addr) + sz + ps - 1) & ~(ps - 1);
@@ -854,11 +853,11 @@ namespace ZUMTLib {
         const auto start = reinterpret_cast<Address_t>(ptr);
         const auto end = start + size;
         
-        static const std::size_t page_size = sysconf(_SC_PAGESIZE);
+        long ps = PageSize();
         
-        for (Address_t page = start & ~(page_size - 1); page < end; page += page_size) {
+        for (Address_t page = start & ~(ps - 1); page < end; page += ps) {
             unsigned char vec;
-            const int ret = mincore(reinterpret_cast<void*>(page), page_size, &vec);
+            const int ret = mincore(reinterpret_cast<void*>(page), ps, &vec);
             if (ret != 0 || (vec & 1) == 0) {
                 return false;
             }
