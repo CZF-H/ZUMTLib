@@ -227,6 +227,8 @@ namespace ZUMTLib {
         ZUMTLib_NODISCARD bool empty() const noexcept { return local == 0; }
         ZUMTLib_NODISCARD Address_t operator*() const noexcept { return value(); }
         explicit operator Address_t() const noexcept { return value(); }
+        
+        operator bool() const noexcept { return !empty(); }
     };
     
     #ifdef ZUMTLib_CAN_64_BIT
