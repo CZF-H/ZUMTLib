@@ -2,7 +2,7 @@
 #include <cinttypes>
 #include <cstdarg>
 #include <dlfcn.h>
-#include <ZUMTLib/ZUMTLib.hpp>
+#include "ZUMTLib/ZUMTLib.hpp"
 
 bool HookedMemcpy;
 class HookMemcpy {
