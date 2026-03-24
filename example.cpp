@@ -98,7 +98,7 @@ int main() {
         const auto orig_val = val_addr.readType<test_type>(true); // 不会被hooked_memcpy发现
         std::cout << "读取值:" << orig_val << std::endl;
 
-        std::cout << "修改操作:" << std::boolalpha << val_addr.writeType<test_type>(1234, true) << std::endl;
+        std::cout << "修改操作:" << std::boolalpha << val_addr.write("FF FF FF FF", true) << std::endl;
         std::cout << "修改后:" << *val_ptr << std::endl;
 
         std::cout << "还原操作:" << val_addr.writeType<test_type>(orig_val, true) << std::endl;
@@ -131,7 +131,7 @@ int main() {
         const auto orig_val = val_addr.readType<test_type>(); // 会被hooked_memcpy发现
         std::cout << "读取值:" << orig_val << std::endl;
 
-        std::cout << "修改操作:" << std::boolalpha << val_addr.writeType<test_type>(1234) << std::endl;
+        std::cout << "修改操作:" << std::boolalpha << val_addr.write("FF FF FF FF") << std::endl;
         std::cout << "修改后:" << *val_ptr << std::endl;
 
         std::cout << "还原操作:" << val_addr.writeType<test_type>(orig_val) << std::endl;

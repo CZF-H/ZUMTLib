@@ -392,6 +392,51 @@ namespace ZUMTLib {
         }
     }
 
+    using Byte_t = std::uint8_t;
+    using Bytes_t = std::vector<Byte_t>;
+    class HEX {
+        Bytes_t bytes;
+    public:
+        // ReSharper disable once CppNonExplicitConvertingConstructor
+        HEX(const char* hex) {
+            while (*hex) {
+                while (*hex == ' ') hex++;
+                if (!*hex) break;
+
+                char byte_str[3] = {0};
+                byte_str[0] = *hex++;
+                if (!*hex) break;
+                byte_str[1] = *hex++;
+
+                auto val = static_cast<uint8_t>(std::strtoul(byte_str, nullptr, 16));
+                bytes.push_back(val);
+            }
+        }
+
+        // ReSharper disable once CppNonExplicitConvertingConstructor
+        HEX(const std::string& hex) : HEX(hex.c_str()) {}
+
+        std::size_t size() const noexcept {
+            return bytes.size();
+        }
+        Byte_t* data() noexcept {
+            return bytes.data();
+        }
+        const Byte_t* data() const noexcept {
+            return bytes.data();
+        }
+        
+        // ReSharper disable once CppNonExplicitConversionOperator
+        operator const Bytes_t&() const noexcept {
+            return bytes;
+        }
+        
+        // ReSharper disable once CppNonExplicitConversionOperator
+        operator const Bytes_t*() const noexcept {
+            return &bytes;
+        }
+    };
+
     inline long PageSize() noexcept {
         static long ps = sysconf(_SC_PAGESIZE);
         return ps > 0 ? ps : 4096; // fallback
@@ -1005,7 +1050,7 @@ namespace ZUMTLib {
         explicit Addr(const String_t& stringAddr) : m_addr(std::stoull(stringAddr)) {}
         template<std::size_t bit>
         explicit Addr(const PtrLow<bit>& obj) noexcept : Addr(obj.value()) {}
-
+        
         bool writeGuard(
             const void* buffer, const std::size_t length,
             const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
@@ -1033,6 +1078,25 @@ namespace ZUMTLib {
             }
 
             return true;
+        }
+        
+        bool writeGuard(
+            const Bytes_t* bytes,
+            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
+            const bool asm_mprotect = ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT,
+            const Proc_t* proc = nullptr
+        ) const {
+            return writeGuard(bytes->data(), bytes->size(), asm_memcpy, asm_mprotect, proc);
+        }
+
+        bool writeGuard(
+            const char* hex_bytes,
+            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
+            const bool asm_mprotect = ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT,
+            const Proc_t* proc = nullptr
+        ) const {
+            const HEX bytes{hex_bytes};
+            return writeGuard(bytes, asm_memcpy, asm_mprotect, proc);
         }
 
         bool write(
@@ -1068,6 +1132,23 @@ namespace ZUMTLib {
             }
 
             return true;
+        }
+
+        bool write(
+            const Bytes_t* bytes,
+            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
+            const bool asm_mprotect = ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT
+        ) const {
+            return write(bytes->data(), bytes->size(), asm_memcpy, asm_mprotect);
+        }
+
+        bool write(
+            const char* hex_bytes,
+            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
+            const bool asm_mprotect = ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT
+        ) const {
+            const HEX bytes{hex_bytes};
+            return write(bytes, asm_memcpy, asm_mprotect);
         }
 
         bool read(
