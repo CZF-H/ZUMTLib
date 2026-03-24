@@ -40,6 +40,15 @@
 # debug information files
 *.dwo
 
+# cmake
+cmake-build*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.dir/
+
+# idea
 .idea/*
 !.idea/copyright
 !.idea/dictionaries
