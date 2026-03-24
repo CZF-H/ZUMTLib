@@ -756,7 +756,7 @@ namespace ZUMTLib {
             if (is_value) local = value & ((1ULL << bit) - 1);
         }
     public:
-        PtrLow Next(const Offset_t offset = 0) const noexcept {
+        ZUMTLib_NODISCARD PtrLow Next(const Offset_t offset = 0) const noexcept {
             const Address_t addr = (local & ((1ULL << bit) - 1)) + offset;
             Address_t value = 0;
             ReadBuffer(addr, &value, ZUMTLib_PTR_BYTE);
@@ -768,7 +768,7 @@ namespace ZUMTLib {
             return *this;
         }
 
-        PtrLow Offset(const Offset_t offset) const noexcept {
+        ZUMTLib_NODISCARD PtrLow Offset(const Offset_t offset) const noexcept {
             PtrLow result = *this;
             result.local += offset;
             return result;
