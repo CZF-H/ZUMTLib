@@ -31,7 +31,6 @@
 #pragma ide diagnostic ignored "OCUnusedGlobalDeclarationInspection"
 
 #include <cstddef>
-#include <cstdint>
 #include <cstring>
 #include <utility>
 #include <initializer_list>
@@ -41,8 +40,10 @@
 #include <algorithm>
 #include <chrono>
 #include <thread>
+#include <iomanip>
 #include <fstream>
 #include <sstream>
+#include <elf.h>
 #include <unistd.h>
 #include <sys/mman.h>
 #include <sys/uio.h>
@@ -106,7 +107,7 @@ namespace ZUMTAsm {
     }
     #define ZUMTLib_memcpy_m ::ZUMTAsm::multi_memcpy
     extern "C" inline long raw_syscall(
-        long nr, long a1, long a2,
+        long number, long a1, long a2,
         long a3, long a4, long a5,
         long a6
     ) noexcept {
@@ -122,7 +123,7 @@ namespace ZUMTAsm {
             "svc #0\n"
             "mov %0, x0\n"
             : "=r"(ret)
-            : "r"(nr), "r"(a1), "r"(a2), "r"(a3),
+            : "r"(number), "r"(a1), "r"(a2), "r"(a3),
               "r"(a4), "r"(a5), "r"(a6)
             : "x0","x1","x2","x3","x4","x5","x8","memory"
         );
@@ -182,7 +183,7 @@ namespace ZUMTAsm {
     }
     #define ZUMTLib_memcpy_m ::ZUMTAsm::multi_memcpy
     extern "C" inline long raw_syscall(
-        long nr, long a1, long a2,
+        long number, long a1, long a2,
         long a3, long a4, long a5,
         long a6
     ) noexcept {
@@ -192,7 +193,7 @@ namespace ZUMTAsm {
         register long r3 __asm__("r3") = a4;
         register long r4 __asm__("r4") = a5;
         register long r5 __asm__("r5") = a6;
-        register long r7 __asm__("r7") = nr;
+        register long r7 __asm__("r7") = number;
 
         __asm__ volatile (
             "svc 0"
@@ -258,7 +259,7 @@ namespace ZUMTAsm {
     #define ZUMTLib_memcpy_m ::ZUMTAsm::multi_memcpy
     #ifdef ZUMTLib_ARCH_X64
     inline long raw_syscall(
-        long nr, long a1, long a2,
+        long number, long a1, long a2,
         long a3, long a4, long a5,
         long a6
     ) {
@@ -271,7 +272,7 @@ namespace ZUMTAsm {
         __asm__ volatile(
             "syscall"
             : "=a"(ret)
-            : "a"(nr),
+            : "a"(number),
               "D"(a1),
               "S"(a2),
               "d"(a3),
@@ -287,7 +288,7 @@ namespace ZUMTAsm {
     #endif
     #ifdef ZUMTLib_ARCH_X86
     extern "C" inline long raw_syscall(
-        long nr, long a1, long a2,
+        long number, long a1, long a2,
         long a3, long a4, long a5,
         long a6 = 0 // x86 unused
     ) noexcept {
@@ -297,7 +298,7 @@ namespace ZUMTAsm {
         __asm__ volatile (
             "int $0x80"
             : "=a"(ret)
-            : "a"(nr),
+            : "a"(number),
               "b"(a1),
               "c"(a2),
               "d"(a3),
@@ -322,8 +323,8 @@ namespace ZUMTAsm {
 
 namespace ZUMTTool {
     #define STD_memcpy std::memcpy
-    #define UNIXSTD_syscall syscall
-    #define UNIXSTD_mprotect mprotect
+    #define UNISTD_syscall syscall
+    #define UNISTD_mprotect mprotect
 
     // ===================================== //
 
@@ -334,10 +335,10 @@ namespace ZUMTTool {
     #define ZUMTLib_memcpy_m STD_memcpy
     #endif
     #ifndef ZUMTLib_syscall
-    #define ZUMTLib_syscall UNIXSTD_syscall
+    #define ZUMTLib_syscall UNISTD_syscall
     #endif
     #ifndef ZUMTLib_mprotect
-    #define ZUMTLib_mprotect UNIXSTD_mprotect
+    #define ZUMTLib_mprotect UNISTD_mprotect
     #endif
 }
 
@@ -354,6 +355,21 @@ namespace ZUMTLib {
     using String_t = std::string;
     using Prot_t = signed int;
     using Inode_t = ino_t;
+
+    struct asm_cfg_t {
+        bool memcpy : 1;
+        bool syscall : 1;
+        bool mprotect : 1;
+    };
+    using asm_cfg = const asm_cfg_t&;
+    asm_cfg asm_cfg_default() {
+        static constexpr asm_cfg_t default_cfg = {
+            ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
+            ZUMTLib_CFG_DEFAULT_USE_ASM_SYSCALL,
+            ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT
+        };
+        return default_cfg;
+    }
 
     namespace alias {
         using BYTE = std::int8_t;
@@ -396,10 +412,93 @@ namespace ZUMTLib {
                 result.end());
             return result;
         }
+        inline void* configured_memcpy(
+            void* dst, const void* src, const size_t len,
+            asm_cfg asm_cfg = asm_cfg_default()
+        ) noexcept {
+            void* result{};
+            if (asm_cfg.memcpy) {
+                if (len >= 128) { // NOLINT(*-branch-clone)
+                    result = ZUMTLib_memcpy_m(dst, src, len);
+                }
+                else {
+                    result = ZUMTLib_memcpy(dst, src, len);
+                }
+            }
+            else {
+                result = STD_memcpy(dst, src, len);
+            }
+            return result;
+        }
+        inline int configured_mprotect(
+            void *addr, size_t len, int prot, // NOLINT
+            asm_cfg asm_cfg = asm_cfg_default()
+        ) noexcept {
+            return asm_cfg.mprotect
+                ? static_cast<int>(ZUMTLib_mprotect(addr, len, prot))
+                : UNISTD_mprotect(addr, len, prot);
+        }
+        inline long configured_syscall(
+            long number,               // NOLINT
+            long a1, long a2, long a3, // NOLINT
+            long a4, long a5, long a6, // NOLINT
+            asm_cfg asm_cfg = asm_cfg_default()
+        ) noexcept {
+            return asm_cfg.syscall
+                ? ZUMTLib_syscall(number, a1, a2, a3, a4, a5, a6)
+                : UNISTD_syscall(number, a1, a2, a3, a4, a5, a6);
+        }
     }
 
     using Byte_t = std::uint8_t;
     using Bytes_t = std::vector<Byte_t>;
+
+    template <typename Type>
+    Bytes_t ToBytes(
+        const Type& value,
+        asm_cfg asm_cfg = asm_cfg_default()
+    ) {
+        #if ZUMTLib_CFG_BYTES_CONVERT_MEMCPY_COPYABLE_CHECK
+        static_assert(std::is_trivially_copyable<Type>::value,
+              "Type must be trivially copyable");
+        #endif
+        const std::size_t type_size = sizeof(Type);
+        Bytes_t bytes(type_size);
+        details::configured_memcpy(bytes.data(), &value, type_size, asm_cfg);
+        return bytes;
+    }
+
+    template <typename Type>
+    Type BytesTo(
+        const Bytes_t& bytes,
+        asm_cfg asm_cfg = asm_cfg_default()
+    ) {
+        #if ZUMTLib_CFG_BYTES_CONVERT_MEMCPY_COPYABLE_CHECK
+        static_assert(std::is_trivially_copyable<Type>::value,
+              "Type must be trivially copyable");
+        #endif
+        const std::size_t type_size = sizeof(Type);
+        if (bytes.size() != type_size) {
+            throw std::runtime_error("size mismatch");
+        }
+        Type value{};
+        details::configured_memcpy(&value, bytes.data(), type_size, asm_cfg);
+        return value;
+    }
+
+    String_t ToHex(const Bytes_t& bytes) {
+        std::ostringstream oss;
+        for (const uint8_t b : bytes) {
+            oss << std::hex
+                << std::uppercase
+                << std::setw(2)
+                << std::setfill('0')
+                << static_cast<short>(b)
+                << " ";
+        }
+        return {oss.str()};
+    }
+
     class HEX {
         Bytes_t bytes;
     public:
@@ -420,7 +519,7 @@ namespace ZUMTLib {
         }
 
         // ReSharper disable once CppNonExplicitConvertingConstructor
-        HEX(const std::string& hex) : HEX(hex.c_str()) {}
+        HEX(const String_t& hex) : HEX(hex.c_str()) {}
 
         std::size_t size() const noexcept {
             return bytes.size();
@@ -430,6 +529,10 @@ namespace ZUMTLib {
         }
         const Byte_t* data() const noexcept {
             return bytes.data();
+        }
+
+        String_t hex() const {
+            return ToHex(bytes);
         }
         
         // ReSharper disable once CppNonExplicitConversionOperator
@@ -491,7 +594,12 @@ namespace ZUMTLib {
         }
     };
 
-    static bool ReadBuffer(const Address_t addr, void* buffer, const std::size_t size, const bool asm_syscall = ZUMTLib_CFG_DEFAULT_USE_ASM_SYSCALL) noexcept { // NOLINT
+    static bool ReadBuffer(
+        const Address_t addr,
+        void* buffer,
+        const std::size_t size, // NOLINT
+        asm_cfg asm_cfg = asm_cfg_default()
+    ) noexcept {
         iovec local{};
         iovec remote{};
 
@@ -500,26 +608,17 @@ namespace ZUMTLib {
         remote.iov_base = reinterpret_cast<void*>(addr);
         remote.iov_len = size;
 
-        const ssize_t ret =
-            asm_syscall ? // NOLINT
-            ZUMTLib_syscall(
-                SYS_process_vm_readv,
-                getpid(), // NOLINT
-                reinterpret_cast<long>(&local),
-                1,
-                reinterpret_cast<long>(&remote),
-                1,
-                0
-            ) :
-            UNIXSTD_syscall(
-                SYS_process_vm_readv,
-                getpid(), // NOLINT
-                &local,
-                1,
-                &remote,
-                1,
-                0
-            );
+        const ssize_t ret = details::configured_syscall(
+            SYS_process_vm_readv,
+            getpid(),
+            reinterpret_cast<long>(&local),
+            1,
+            reinterpret_cast<long>(&remote),
+            1,
+            0,
+            asm_cfg
+        );
+
         return ret == static_cast<ssize_t>(size);
     }
 
@@ -902,7 +1001,7 @@ namespace ZUMTLib {
         std::size_t m_size{};
         Prot_t m_orig{};
         bool state{true};
-        bool asm_mprotect{ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT};
+        asm_cfg_t asm_cfg = asm_cfg_default();
     protected:
         std::vector<ProtRange> m_tbl{};
         bool m_tblValid{false};
@@ -981,18 +1080,13 @@ namespace ZUMTLib {
         }
 
         void Set_asm_mprotect(const bool to) {
-            asm_mprotect = to;
+            asm_cfg.mprotect = to;
         }
 
         void Restore() noexcept {
             if (!state) return;
             if (m_addr && m_size > 0) {
-                if (asm_mprotect) {
-                    ZUMTLib_mprotect(m_addr, m_size, m_orig);
-                }
-                else {
-                    UNIXSTD_mprotect(m_addr, m_size, m_orig);
-                }
+                details::configured_mprotect(m_addr, m_size, m_orig, asm_cfg);
             }
             state = false;
         }
@@ -1003,7 +1097,7 @@ namespace ZUMTLib {
 
         ZUMTLib_NODISCARD bool make(const Prot_t prot) const noexcept {
             if (!m_addr || m_size == 0) return false;
-            return (asm_mprotect ? ZUMTLib_mprotect(m_addr, m_size, prot) : UNIXSTD_mprotect(m_addr, m_size, prot)) == 0;
+            return details::configured_mprotect(m_addr, m_size, prot, asm_cfg) == 0;
         }
 
         void RefreshTblManual() {
@@ -1057,58 +1151,50 @@ namespace ZUMTLib {
         template<std::size_t bit>
         explicit Addr(const PtrLow<bit>& obj) noexcept : Addr(obj.value()) {}
         
-        bool writeGuard(
+        bool writeGuardFrom(
             const void* buffer, const std::size_t length,
-            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
-            const bool asm_mprotect = ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT,
+            asm_cfg asm_cfg = asm_cfg_default(),
             const Proc_t* proc = nullptr
         ) const {
             if (!m_addr || !buffer || length == 0) return false;
 
             ProtGuard guard(ptr(), length, proc);
-            guard.Set_asm_mprotect(asm_mprotect);
-
+            guard.Set_asm_mprotect(asm_cfg.mprotect);
             if (!guard.make(PROT_READ | PROT_WRITE | PROT_EXEC))
                 return false;
-
-            if (asm_memcpy) {
-                if (length >= 128) { // NOLINT(*-branch-clone)
-                    ZUMTLib_memcpy_m(ptr(), buffer, length);
-                }
-                else {
-                    ZUMTLib_memcpy(ptr(), buffer, length);
-                }
-            }
-            else {
-                STD_memcpy(ptr(), buffer, length);
-            }
-
+            details::configured_memcpy(ptr(), buffer, length, asm_cfg);
             return true;
         }
         
-        bool writeGuard(
+        bool writeGuardFrom(
             const Bytes_t* bytes,
-            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
-            const bool asm_mprotect = ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT,
+            asm_cfg asm_cfg = asm_cfg_default(),
             const Proc_t* proc = nullptr
         ) const {
-            return writeGuard(bytes->data(), bytes->size(), asm_memcpy, asm_mprotect, proc);
+            return writeGuardFrom(bytes->data(), bytes->size(), asm_cfg, proc);
         }
 
-        bool writeGuard(
+        bool writeGuardHex(
             const char* hex_bytes,
-            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
-            const bool asm_mprotect = ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT,
+            asm_cfg asm_cfg = asm_cfg_default(),
             const Proc_t* proc = nullptr
         ) const {
             const HEX bytes{hex_bytes};
-            return writeGuard(bytes, asm_memcpy, asm_mprotect, proc);
+            return writeGuard(bytes, asm_cfg, proc);
+        }
+        
+        template<typename Type, std::size_t size = sizeof(Type)>
+        bool writeGuard(
+            const Type& value,
+            asm_cfg asm_cfg = asm_cfg_default(),
+            const Proc_t* proc = nullptr
+        ) const {
+            return writeGuardFrom(&value, size, asm_cfg, proc);
         }
 
-        bool write(
+        bool writeFrom(
             const void* buffer, const std::size_t length,
-            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
-            const bool asm_mprotect = ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT
+            asm_cfg asm_cfg = asm_cfg_default()
         ) const noexcept {
             if (!m_addr || !buffer || length == 0) return false;
 
@@ -1119,98 +1205,79 @@ namespace ZUMTLib {
             // ReSharper disable once CppRedundantParentheses
             const auto end = (reinterpret_cast<Address_t>(p) + length + ps - 1) & ~(ps - 1);
             const size_t size = end - start;
-
             static Prot_t prot = PROT_READ | PROT_WRITE | PROT_EXEC;
-            const long ret = asm_mprotect
-                ? ZUMTLib_mprotect(reinterpret_cast<void*>(start), size, prot)
-                : UNIXSTD_mprotect(reinterpret_cast<void*>(start), size, prot);
-
-            if (ret != 0) return false;
-
-            if (asm_memcpy) {
-                if (length >= 128) { // NOLINT
-                    ZUMTLib_memcpy_m(p, buffer, length);
-                } else {
-                    ZUMTLib_memcpy(p, buffer, length);
-                }
-            } else {
-                STD_memcpy(p, buffer, length);
-            }
-
+            if (details::configured_mprotect(reinterpret_cast<void*>(start), size, prot, asm_cfg) != 0) return false;
+            details::configured_memcpy(p, buffer, length, asm_cfg);
             return true;
         }
 
-        bool write(
+        bool writeFrom(
             const Bytes_t* bytes,
-            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
-            const bool asm_mprotect = ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT
+            asm_cfg asm_cfg = asm_cfg_default()
         ) const {
-            return write(bytes->data(), bytes->size(), asm_memcpy, asm_mprotect);
+            return writeFrom(bytes->data(), bytes->size(), asm_cfg);
         }
 
+        bool writeHex(
+            const std::string& hex_bytes,
+            asm_cfg asm_cfg = asm_cfg_default()
+        ) const {
+            const HEX hex_arr{hex_bytes};
+            return writeFrom(hex_arr, asm_cfg);
+        }
+
+        template<typename Type, std::size_t size = sizeof(Type)>
         bool write(
-            const char* hex_bytes,
-            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
-            const bool asm_mprotect = ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT
-        ) const {
-            const HEX bytes{hex_bytes};
-            return write(bytes, asm_memcpy, asm_mprotect);
+            const Type& value,
+            asm_cfg asm_cfg = asm_cfg_default()
+        ) const noexcept {
+            return writeFrom(&value, size, asm_cfg);
         }
 
-        bool read(
+        bool readTo(
             void* buffer, const std::size_t length,
-            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY
+            asm_cfg asm_cfg = asm_cfg_default()
         ) const noexcept {
             if (!m_addr || !buffer || length == 0) return false;
-
-            if (asm_memcpy) {
-                if (length >= 128) { // NOLINT(*-branch-clone)
-                    ZUMTLib_memcpy_m(buffer, ptr(), length);
-                }
-                else {
-                    ZUMTLib_memcpy(buffer, ptr(), length);
-                }
-            }
-            else {
-                STD_memcpy(buffer, ptr(), length);
-            }
+            details::configured_memcpy(buffer, ptr(), length, asm_cfg);
             return true;
         }
 
-        template<typename _Ty, std::size_t _Sz = sizeof(_Ty)> // NOLINT(*-reserved-identifier)
-        bool writeType(
-            const _Ty& value,
-            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
-            const bool asm_mprotect = ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT
+        template<typename Type, std::size_t size = sizeof(Type)>
+        bool readTo(
+            Type* buf,
+            asm_cfg asm_cfg = asm_cfg_default()
         ) const noexcept {
-            return write(&value, _Sz, asm_memcpy, asm_mprotect);
+            return readTo(reinterpret_cast<void*>(buf), size, asm_cfg);
         }
 
-        template<typename _Ty, std::size_t _Sz = sizeof(_Ty)> // NOLINT(*-reserved-identifier)
-        bool writeTypeGuard(
-            const _Ty& value,
-            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
-            const bool asm_mprotect = ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT,
-            const Proc_t* proc = nullptr
-        ) const {
-            return writeGuard(&value, _Sz, asm_memcpy, asm_mprotect, proc);
+        template<std::size_t size>
+        bool readTo(
+            Bytes_t& data,
+            asm_cfg asm_cfg = asm_cfg_default()
+        ) const noexcept {
+            data.resize(size);
+            return readTo(data.data(), size, asm_cfg);
         }
 
-        template<typename _Ty, std::size_t _Sz = sizeof(_Ty)> // NOLINT(*-reserved-identifier)
-        _Ty readType(
-            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY
+        template<std::size_t size>
+        String_t readHex(
+            asm_cfg asm_cfg = asm_cfg_default()
         ) const noexcept {
-            _Ty result{};
-            read(reinterpret_cast<void*>(&result), _Sz, asm_memcpy);
+            Bytes_t data(size);
+            if (readTo(data.data(), size, asm_cfg)) {
+                return ToHex(data);
+            }
+            return {};
+        }
+        
+        template<typename Type, std::size_t size = sizeof(Type)>
+        Type read(
+            asm_cfg asm_cfg = asm_cfg_default()
+        ) const noexcept {
+            Type result{};
+            readTo(reinterpret_cast<void*>(&result), size, asm_cfg);
             return result;
-        }
-
-        template<typename _Ty, std::size_t _Sz = sizeof(_Ty)> // NOLINT(*-reserved-identifier)
-        bool readType(
-            _Ty* buf,
-            const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY
-        ) const noexcept {
-            return read(reinterpret_cast<void*>(buf), _Sz);
         }
 
         ZUMTLib_NODISCARD base_type address() const noexcept {
@@ -1449,6 +1516,7 @@ namespace ZUMTLib {
     using ModuleList = std::vector<Module>;
 
     inline ModuleList GetModuleList(
+        const std::vector<std::string>& filters = {},
         bool merge = false,
         const Proc_t* proc = {}
     ) {
@@ -1471,45 +1539,56 @@ namespace ZUMTLib {
             std::getline(iss, path);
 
             if (!path.empty()) {
-                std::size_t pos = path.find_first_not_of(' ');
-                if (pos == String_t::npos) continue;
-                path = path.substr(pos);
-                if (path.empty()) continue;
+                bool found = false;
+                if (!filters.empty()) {
+                    for (auto& filter : filters) {
+                        if (path.find(filter) != String_t::npos) {
+                            found = true;
+                        }
+                        if (found) break;
+                    }
+                } else found = true;
+                if (found) {
+                    std::size_t pos = path.find_first_not_of(' ');
+                    if (pos == String_t::npos) continue;
+                    path = path.substr(pos);
+                    if (path.empty()) continue;
 
-                std::size_t dash = addr.find('-');
-                if (dash == String_t::npos) continue;
+                    std::size_t dash = addr.find('-');
+                    if (dash == String_t::npos) continue;
 
-                Addr start(std::stoull(addr.substr(0, dash), nullptr, 16));
-                Addr end(std::stoull(addr.substr(dash + 1), nullptr, 16));
+                    Addr start(std::stoull(addr.substr(0, dash), nullptr, 16));
+                    Addr end(std::stoull(addr.substr(dash + 1), nullptr, 16));
 
-                if (!merge) {
-                    modules.emplace_back(
-                        path.substr(path.find_last_of('/') + 1),
-                        AddrRange{start, end},
-                        perms,
-                        offset,
-                        dev,
-                        inode,
-                        path
-                    );
-                    continue;
-                }
+                    if (!merge) {
+                        modules.emplace_back(
+                            path.substr(path.find_last_of('/') + 1),
+                            AddrRange{start, end},
+                            perms,
+                            offset,
+                            dev,
+                            inode,
+                            path
+                        );
+                        continue;
+                    }
 
-                auto it = moduleMap.find(path);
-                if (it == moduleMap.end()) {
-                    Module mod(
-                        path.substr(path.find_last_of('/') + 1),
-                        {start, end},
-                        perms,
-                        offset,
-                        dev,
-                        inode,
-                        path
-                    );
-                    moduleMap[path] = mod;
-                }
-                else {
-                    it->second.range().end = end;
+                    auto it = moduleMap.find(path);
+                    if (it == moduleMap.end()) {
+                        Module mod(
+                            path.substr(path.find_last_of('/') + 1),
+                            {start, end},
+                            perms,
+                            offset,
+                            dev,
+                            inode,
+                            path
+                        );
+                        moduleMap[path] = mod;
+                    }
+                    else {
+                        it->second.range().end = end;
+                    }
                 }
             }
         }
@@ -1535,13 +1614,13 @@ namespace ZUMTLib {
 
         while (std::getline(ifs, line)) {
             const char* str = line.c_str();
-            char* endptr;
-            Address_t start = strtoul(str, &endptr, 16);
-            if (*endptr != '-') continue;
-            Address_t end = strtoul(endptr + 1, &endptr, 16);
-            if (*endptr != ' ') continue;
-            while (*endptr == ' ') endptr++;
-            String_t perms(endptr, 4);
+            char* end_ptr;
+            Address_t start = strtoul(str, &end_ptr, 16);
+            if (*end_ptr != '-') continue;
+            Address_t end = strtoul(end_ptr + 1, &end_ptr, 16);
+            if (*end_ptr != ' ') continue;
+            while (*end_ptr == ' ') end_ptr++;
+            String_t perms(end_ptr, 4);
 
             MapRegion localRegion;
             localRegion.start = Addr(start);
@@ -1572,7 +1651,7 @@ namespace ZUMTLib {
         const AddrRange& range,
         const String_t& outPath,
         Addr::base_type chunkSize = 0,
-        const bool asm_memcpy = ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY
+        asm_cfg asm_cfg = asm_cfg_default()
     ) {
         std::ofstream ofs(outPath, std::ios::binary);
         if (!ofs) return false;
@@ -1615,17 +1694,7 @@ namespace ZUMTLib {
             bool readable = currentRegion && !currentRegion->perms.empty() && currentRegion->perms[0] == 'r';
 
             if (readable) {
-                if (asm_memcpy) {
-                    if (size >= 128) { // NOLINT(*-branch-clone)
-                        ZUMTLib_memcpy_m(buffer.data(), ptr, size);
-                    }
-                    else {
-                        ZUMTLib_memcpy(buffer.data(), ptr, size);
-                    }
-                }
-                else {
-                    STD_memcpy(buffer.data(), ptr, size);
-                }
+                details::configured_memcpy(buffer.data(), ptr, size, asm_cfg);
                 ofs.write(buffer.data(), static_cast<std::streamsize>(size));
             }
             else {
@@ -1647,14 +1716,8 @@ namespace ZUMTLib {
         inline Addr operator""_Addr(const unsigned long long address) {
             return Addr{static_cast<Address_t>(address)};
         }
-        inline PtrL32 operator""_PtrL32(const unsigned long long address) {
-            return PtrL32{static_cast<Address_t>(address)};
-        }
-        inline PtrL40 operator""_PtrL40(const unsigned long long address) {
-            return PtrL40{static_cast<Address_t>(address)};
-        }
-        inline PtrL48 operator""_PtrL48(const unsigned long long address) {
-            return PtrL48{static_cast<Address_t>(address)};
+        inline Offset_t operator""_Offset(const unsigned long long address) {
+            return address;
         }
     }
 }

@@ -43,6 +43,9 @@
 // 开启此项将在没有注明的情况默认使用汇编mprotect
 #define ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT false
 
+// Bytes_t 操作 memcpy copyable 检查
+#define ZUMTLib_CFG_BYTES_CONVERT_MEMCPY_COPYABLE_CHECK false
+
 // 开启语法 using ZUMTLib_Alias;
 #define ZUMTLib_CFG_USING_ZUMTLib_Alias true
 
