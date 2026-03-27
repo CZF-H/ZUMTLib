@@ -5,6 +5,7 @@
 #include "ZUMTLib/ZUMTLib.hpp"
 
 std::vector<uintptr_t> protected_addresses{};
+long long TestEditVal = 123456789LL;
 
 void check_mem_permissions(void* ptr) {
     std::ifstream maps("/proc/self/maps");
@@ -123,6 +124,40 @@ int wr_test() {
         std::cout << "还原后:" << *val_ptr << std::endl;
 
         check_mem_permissions(val_ptr);
+
+        std::cout << "// ================= END ================= //" << std::endl;
+    }
+    std::cout << std::endl;
+    {
+        std::cout << "// =============== PART 3 =============== //" << std::endl;
+
+        const auto real_addr = reinterpret_cast<ZUMTLib::Address_t>(&TestEditVal);
+        const ZUMTLib::Address_t exe_base = ZUMTLib::GetModuleBase("ZUMTLib_example");
+
+        std::cout << "真实的地址:0x" << std::hex << std::uppercase << real_addr  << std::endl;
+        std::cout << "程序的基址:0x" << std::hex << std::uppercase << exe_base << std::endl;
+        std::cout << "真实的偏移:0x" << std::hex << std::uppercase << real_addr - exe_base << std::endl;
+
+        const ZUMTLib::Addr val_addr(exe_base + 0x12010 /* TestEditVal */);
+        std::cout << "偏移后地址:0x" << std::hex << std::uppercase << *val_addr << std::endl;
+        std::cout << std::dec;
+
+        const auto real_orig_val = TestEditVal;
+        std::cout << "原始值:" << real_orig_val << std::endl;
+
+        const ZUMTLib::Bytes_t orig_val = val_addr.read<8>();
+        std::cout << "读取值:" << ZUMTLib::Bytes2Hex(orig_val) << std::endl;
+
+        const ZUMTLib::Bytes_t reversed(orig_val.crbegin(), orig_val.crend());
+        if (val_addr.writeFrom(reversed)) {
+            std::cout << "写入值:" << ZUMTLib::Bytes2Hex(reversed) << std::endl;
+        }
+
+        const auto real_val = TestEditVal;
+        std::cout << "现在值:" << real_val << std::endl;
+
+        const auto added_val = real_orig_val + real_val;
+        std::cout << "相加值:" << added_val << std::endl;
 
         std::cout << "// ================= END ================= //" << std::endl;
     }

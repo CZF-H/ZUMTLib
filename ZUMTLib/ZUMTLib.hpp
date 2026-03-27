@@ -371,6 +371,12 @@ namespace ZUMTLib {
         return default_cfg;
     }
 
+    enum byte_endian_ : uint8_t {
+        little_endian,
+        big_endian
+    };
+    constexpr byte_endian_ default_endian = ZUMTLib_ENDIAN;
+
     namespace alias {
         using BYTE = std::int8_t;
         using WORD = std::int16_t;
@@ -456,37 +462,55 @@ namespace ZUMTLib {
     template <typename Type>
     Bytes_t ToBytes(
         const Type& value,
+        const byte_endian_ endian = default_endian,
         asm_cfg asm_cfg = asm_cfg_default()
     ) {
         #if ZUMTLib_CFG_BYTES_CONVERT_MEMCPY_COPYABLE_CHECK
         static_assert(std::is_trivially_copyable<Type>::value,
-              "Type must be trivially copyable");
+                      "Type must be trivially copyable");
         #endif
+
         const std::size_t type_size = sizeof(Type);
         Bytes_t bytes(type_size);
+
         details::configured_memcpy(bytes.data(), &value, type_size, asm_cfg);
+
+        if (endian == big_endian) {
+            std::reverse(bytes.begin(), bytes.end());
+        }
+
         return bytes;
     }
 
     template <typename Type>
     Type BytesTo(
         const Bytes_t& bytes,
+        const byte_endian_ endian = default_endian,
         asm_cfg asm_cfg = asm_cfg_default()
     ) {
         #if ZUMTLib_CFG_BYTES_CONVERT_MEMCPY_COPYABLE_CHECK
         static_assert(std::is_trivially_copyable<Type>::value,
-              "Type must be trivially copyable");
+                      "Type must be trivially copyable");
         #endif
+
         const std::size_t type_size = sizeof(Type);
         if (bytes.size() != type_size) {
             throw std::runtime_error("size mismatch");
         }
+
+        Bytes_t temp = bytes;
+
+        if (endian == big_endian) {
+            std::reverse(temp.begin(), temp.end());
+        }
+
         Type value{};
-        details::configured_memcpy(&value, bytes.data(), type_size, asm_cfg);
+        details::configured_memcpy(&value, temp.data(), type_size, asm_cfg);
+
         return value;
     }
 
-    String_t ToHex(const Bytes_t& bytes) {
+    String_t Bytes2Hex(const Bytes_t& bytes) {
         std::ostringstream oss;
         for (const uint8_t b : bytes) {
             oss << std::hex
@@ -499,11 +523,11 @@ namespace ZUMTLib {
         return {oss.str()};
     }
 
-    class HEX {
+    class BytesHEX {
         Bytes_t bytes;
     public:
         // ReSharper disable once CppNonExplicitConvertingConstructor
-        HEX(const char* hex) {
+        BytesHEX(const char* hex) {
             while (*hex) {
                 while (*hex == ' ') hex++;
                 if (!*hex) break;
@@ -519,7 +543,7 @@ namespace ZUMTLib {
         }
 
         // ReSharper disable once CppNonExplicitConvertingConstructor
-        HEX(const String_t& hex) : HEX(hex.c_str()) {}
+        BytesHEX(const String_t& hex) : BytesHEX(hex.c_str()) {}
 
         std::size_t size() const noexcept {
             return bytes.size();
@@ -532,7 +556,7 @@ namespace ZUMTLib {
         }
 
         String_t hex() const {
-            return ToHex(bytes);
+            return Bytes2Hex(bytes);
         }
         
         // ReSharper disable once CppNonExplicitConversionOperator
@@ -545,6 +569,11 @@ namespace ZUMTLib {
             return &bytes;
         }
     };
+
+    Bytes_t Hex2Bytes(const String_t& hex) {
+        BytesHEX bytesHex(hex);
+        return {bytesHex};
+    }
 
     inline long PageSize() noexcept {
         static long ps = sysconf(_SC_PAGESIZE);
@@ -1179,7 +1208,7 @@ namespace ZUMTLib {
             asm_cfg asm_cfg = asm_cfg_default(),
             const Proc_t* proc = nullptr
         ) const {
-            const HEX bytes{hex_bytes};
+            const BytesHEX bytes{hex_bytes};
             return writeGuard(bytes, asm_cfg, proc);
         }
         
@@ -1212,17 +1241,17 @@ namespace ZUMTLib {
         }
 
         bool writeFrom(
-            const Bytes_t* bytes,
+            const Bytes_t& bytes,
             asm_cfg asm_cfg = asm_cfg_default()
         ) const {
-            return writeFrom(bytes->data(), bytes->size(), asm_cfg);
+            return writeFrom(bytes.data(), bytes.size(), asm_cfg);
         }
 
         bool writeHex(
             const std::string& hex_bytes,
             asm_cfg asm_cfg = asm_cfg_default()
         ) const {
-            const HEX hex_arr{hex_bytes};
+            const BytesHEX hex_arr{hex_bytes};
             return writeFrom(hex_arr, asm_cfg);
         }
 
@@ -1251,22 +1280,29 @@ namespace ZUMTLib {
             return readTo(reinterpret_cast<void*>(buf), size, asm_cfg);
         }
 
-        template<std::size_t size>
+        bool readTo(
+            Bytes_t& data,
+            const std::size_t size,
+            asm_cfg asm_cfg = asm_cfg_default()
+        ) const {
+            data.resize(size);
+            return readTo(data.data(), size, asm_cfg);
+        }
+
         bool readTo(
             Bytes_t& data,
             asm_cfg asm_cfg = asm_cfg_default()
-        ) const noexcept {
-            data.resize(size);
-            return readTo(data.data(), size, asm_cfg);
+        ) const {;
+            return readTo(data.data(), data.size(), asm_cfg);
         }
 
         template<std::size_t size>
         String_t readHex(
             asm_cfg asm_cfg = asm_cfg_default()
-        ) const noexcept {
+        ) const {
             Bytes_t data(size);
             if (readTo(data.data(), size, asm_cfg)) {
-                return ToHex(data);
+                return Bytes2Hex(data);
             }
             return {};
         }
@@ -1278,6 +1314,15 @@ namespace ZUMTLib {
             Type result{};
             readTo(reinterpret_cast<void*>(&result), size, asm_cfg);
             return result;
+        }
+
+        template<std::size_t size>
+        Bytes_t read(
+            asm_cfg asm_cfg = asm_cfg_default()
+        ) const {
+            Bytes_t bytes{};
+            readTo(bytes, size, asm_cfg);
+            return bytes;
         }
 
         ZUMTLib_NODISCARD base_type address() const noexcept {

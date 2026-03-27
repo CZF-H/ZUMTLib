@@ -37,11 +37,11 @@
 #define ZUMTLib_PTR_BYTE (sizeof(void*))
 #define ZUMTLib_BIT      (ZUMTLib_PTR_BYTE*8)
 #if INTPTR_MAX == 0x7fff
-#define ZUMTLib_16_BIT
+    #define ZUMTLib_16_BIT
 
     #define ZUMTLib_CAN_16_BIT
 #elif INTPTR_MAX == 0x7fffffff
-#define ZUMTLib_32_BIT
+    #define ZUMTLib_32_BIT
 
     #define ZUMTLib_CAN_16_BIT
     #define ZUMTLib_CAN_32_BIT
@@ -57,31 +57,50 @@
 
 #if defined(__x86_64__)
     #define ZUMTLib_ARCH_X64
+
     #define ZUMTLib_X86
 #elif defined(__i386__)
     #define ZUMTLib_ARCH_X86
+
     #define ZUMTLib_X86
 #elif defined(__aarch64__)
     #define ZUMTLib_ARCH_ARM64
+
     #define ZUMTLib_ARM
 #elif defined(__arm__)
     #define ZUMTLib_ARCH_ARM32
+
     #define ZUMTLib_ARM
 #elif defined(__riscv)
     #define ZUMTLib_ARCH_RISCV
+
     #define ZUMTLib_RISCV
 #elif defined(__mips__)
     #define ZUMTLib_ARCH_MIPS
+
     #define ZUMTLib_MIPS
 #elif defined(__powerpc__)
     #define ZUMTLib_ARCH_PPC
+
     #define ZUMTLib_PPC
 #elif defined(__loongarch__)
     #define ZUMTLib_ARCH_LOONGARCH
+
     #define ZUMTLib_LOONGARCH
 #else
     #define ZUMTLib_ARCH_UNKNOWN
-    #define ZUMTLib_ARCH_NONE
+
+    #define ZUMTLib_NONEARCH
+#endif
+
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
+    #define ZUMTLib_IS_LITTLE_ENDIAN
+
+    #define ZUMTLib_ENDIAN little_endian
+#else
+    #define ZUMTLib_IS_BIG_ENDIAN
+
+    #define ZUMTLib_ENDIAN big_endian
 #endif
 
 #endif //ZUMTLIB_ENV_H
