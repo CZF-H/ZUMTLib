@@ -2234,8 +2234,8 @@ namespace ZUMTLib {
 
     constexpr auto AUTHOR_NAME = "江芷酱紫";
     constexpr auto PROJECT_NAME = "ZUMTLib";
-    constexpr auto PROJECT_VERSION = "1.1.1";
-    constexpr auto PROJECT_VERSION_CODE = 10101;
+    constexpr auto PROJECT_VERSION = "1.2.0";
+    constexpr auto PROJECT_VERSION_CODE = 10200;
 }
 #pragma clang diagnostic pop
 #endif //ZUMTLib_HPP
