@@ -53,9 +53,12 @@
 #include "ZUMTLib_Cfg.h"
 #include "ZUMTLib_Env.h"
 
-#if ZUMTLib_CFG_USING_ZUMTLib_Alias
-// For using ZUMTLib_Alias;
-#define ZUMTLib_Alias namespace ::ZUMTLib::alias
+#if ZUMTLib_CFG_USING_ZUMTType_Alias
+// For using ZUMTType_Alias;
+#define ZUMTType_Alias namespace ::ZUMTType::alias
+#endif
+#if ZUMTLib_CFG_USING_ZUMTConfig
+#define ZUMTConfig namespace ::ZUMTCfg
 #endif
 #if ZUMTLib_CFG_USING_ZUMTLib_Literals
 // For using ZUMTLib_Literals;
@@ -77,8 +80,8 @@ namespace ZUMTAsm {
             "b.ne 1b\n"
             "2:\n"
             : "+r"(d),
-              "+r"(s),
-              "+r"(n)
+            "+r"(s),
+            "+r"(n)
             :
             : "w3", "memory"
         );
@@ -107,8 +110,12 @@ namespace ZUMTAsm {
     }
     #define ZUMTLib_memcpy_m ::ZUMTAsm::multi_memcpy
     extern "C" inline long raw_syscall(
-        long number, long a1, long a2,
-        long a3, long a4, long a5,
+        long number,
+        long a1,
+        long a2,
+        long a3,
+        long a4,
+        long a5,
         long a6
     ) noexcept {
         long ret;
@@ -124,7 +131,7 @@ namespace ZUMTAsm {
             "mov %0, x0\n"
             : "=r"(ret)
             : "r"(number), "r"(a1), "r"(a2), "r"(a3),
-              "r"(a4), "r"(a5), "r"(a6)
+            "r"(a4), "r"(a5), "r"(a6)
             : "x0","x1","x2","x3","x4","x5","x8","memory"
         );
         return ret;
@@ -146,8 +153,8 @@ namespace ZUMTAsm {
             "bne 1b\n"
             "2:\n"
             : "+r"(n),
-              "+r"(s),
-              "+r"(d)
+            "+r"(s),
+            "+r"(d)
             :
             : "r3", "memory"
         );
@@ -171,8 +178,8 @@ namespace ZUMTAsm {
             "bne 1b\n"
             "2:\n"
             : "+r"(words),
-              "+r"(s),
-              "+r"(d)
+            "+r"(s),
+            "+r"(d)
             :
             : "r3", "memory"
         );
@@ -183,8 +190,12 @@ namespace ZUMTAsm {
     }
     #define ZUMTLib_memcpy_m ::ZUMTAsm::multi_memcpy
     extern "C" inline long raw_syscall(
-        long number, long a1, long a2,
-        long a3, long a4, long a5,
+        long number,
+        long a1,
+        long a2,
+        long a3,
+        long a4,
+        long a5,
         long a6
     ) noexcept {
         register long r0 __asm__("r0") = a1;
@@ -199,11 +210,11 @@ namespace ZUMTAsm {
             "svc 0"
             : "+r"(r0)
             : "r"(r7),
-              "r"(r1),
-              "r"(r2),
-              "r"(r3),
-              "r"(r4),
-              "r"(r5)
+            "r"(r1),
+            "r"(r2),
+            "r"(r3),
+            "r"(r4),
+            "r"(r5)
             : "memory"
         );
 
@@ -212,27 +223,29 @@ namespace ZUMTAsm {
     #define ZUMTLib_syscall ::ZUMTAsm::raw_syscall
     #endif
     #ifdef ZUMTLib_X86
-    extern "C" inline void* raw_memcpy(void* dst, const void* src, size_t n) {
+    extern "C" inline void* raw_memcpy(void* dst, const void* src, std::size_t n) {
         void* ret = dst;
 
         asm volatile (
             "rep movsb"
             : "+D"(dst),
-              "+S"(src),
-              "+c"(n)
+            "+S"(src),
+            "+c"(n)
             :
             : "memory"
         );
 
         return ret;
     }
+
     #define ZUMTLib_memcpy ::ZUMTAsm::raw_memcpy
-    extern "C" inline void* multi_memcpy(void* dst, const void* src, size_t n) {
+
+    extern "C" inline void* multi_memcpy(void* dst, const void* src, std::size_t n) {
         auto d = static_cast<char*>(dst);
         auto s = static_cast<const char*>(src);
 
-        size_t blocks = n / 16;
-        size_t tail = n % 16;
+        std::size_t blocks = n / 16;
+        std::size_t tail = n % 16;
 
         asm volatile (
             "1:\n"
@@ -246,8 +259,8 @@ namespace ZUMTAsm {
             "jmp 1b\n"
             "2:\n"
             : "+r"(blocks),
-              "+r"(s),
-              "+r"(d)
+            "+r"(s),
+            "+r"(d)
             :
             : "xmm0", "memory"
         );
@@ -256,16 +269,21 @@ namespace ZUMTAsm {
 
         return dst;
     }
+
     #define ZUMTLib_memcpy_m ::ZUMTAsm::multi_memcpy
     #ifdef ZUMTLib_ARCH_X64
     inline long raw_syscall(
-        long number, long a1, long a2,
-        long a3, long a4, long a5,
+        long number,
+        long a1,
+        long a2,
+        long a3,
+        long a4,
+        long a5,
         long a6
     ) {
         register long r10 asm("r10") = a4;
-        register long r8  asm("r8")  = a5;
-        register long r9  asm("r9")  = a6;
+        register long r8 asm("r8") = a5;
+        register long r9 asm("r9") = a6;
 
         long ret;
 
@@ -273,37 +291,42 @@ namespace ZUMTAsm {
             "syscall"
             : "=a"(ret)
             : "a"(number),
-              "D"(a1),
-              "S"(a2),
-              "d"(a3),
-              "r"(r10),
-              "r"(r8),
-              "r"(r9)
+            "D"(a1),
+            "S"(a2),
+            "d"(a3),
+            "r"(r10),
+            "r"(r8),
+            "r"(r9)
             : "rcx", "r11", "memory"
         );
 
         return ret;
     }
+
     #define ZUMTLib_syscall ::ZUMTAsm::raw_syscall
     #endif
     #ifdef ZUMTLib_ARCH_X86
     extern "C" inline long raw_syscall(
-        long number, long a1, long a2,
-        long a3, long a4, long a5,
+        long number,
+        long a1,
+        long a2,
+        long a3,
+        long a4,
+        long a5,
         long a6 = 0 // x86 unused
     ) noexcept {
         long ret;
-        (void) a6;
+        (void)a6;
 
         __asm__ volatile (
             "int $0x80"
             : "=a"(ret)
             : "a"(number),
-              "b"(a1),
-              "c"(a2),
-              "d"(a3),
-              "S"(a4),
-              "D"(a5)
+            "b"(a1),
+            "c"(a2),
+            "d"(a3),
+            "S"(a4),
+            "D"(a5)
             : "memory"
         );
 
@@ -314,9 +337,10 @@ namespace ZUMTAsm {
     #endif
 
     #ifdef ZUMTLib_syscall
-    extern "C" inline long raw_mprotect(void* addr, const size_t len, const int prot) {
+    extern "C" inline long raw_mprotect(void* addr, const std::size_t len, const int prot) {
         return ZUMTLib_syscall(10, reinterpret_cast<long>(addr), static_cast<long>(len), prot, 0, 0, 0);
     }
+
     #define ZUMTLib_mprotect ::ZUMTAsm::raw_mprotect
     #endif
 }
@@ -342,40 +366,92 @@ namespace ZUMTTool {
     #endif
 }
 
-namespace ZUMTLib {
-    namespace Asm = ZUMTAsm;
-    namespace Tool = ZUMTTool;
+namespace ZUMTCfg {
+    using asm_flag_t = uint8_t;
 
-    auto self_maps = ZUMTLib_CFG_DEFAULT_SELF_MAPS;
-    auto self_cmdline = ZUMTLib_CFG_DEFAULT_SELF_CMDLINE;
-    auto bss_sign = ZUMTLib_CFG_DEFAULT_MODULE_BSS_SIGN;
+    enum asm_flag_ : asm_flag_t {
+        asm_none_func = 0,
+        asm_memcpy    = 1 << 0, // 0000 0001
+        asm_syscall   = 1 << 1, // 0000 0010
+        asm_mprotect  = 1 << 2, // 0000 0100
+    };
 
+    inline asm_flag_ asm_flag_default() {
+        static constexpr asm_flag_ default_flag = asm_none_func
+            #if ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY
+        | asm_memcpy
+            #endif
+            #if ZUMTLib_CFG_DEFAULT_USE_ASM_SYSCALL
+        | asm_syscall
+            #endif
+            #if ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT
+        | asm_mprotect
+            #endif
+            ;
+        return default_flag;
+    }
+
+    struct asm_cfg_t {
+        bool memcpy   : 1;
+        bool syscall  : 1;
+        bool mprotect : 1;
+
+        // ReSharper disable once CppNonExplicitConvertingConstructor
+        constexpr asm_cfg_t(const asm_flag_t flag = asm_flag_default()) :
+            memcpy((flag & asm_memcpy) != 0),
+            syscall((flag & asm_syscall) != 0),
+            mprotect((flag & asm_mprotect) != 0) {}
+
+        constexpr asm_cfg_t(
+            const bool _memcpy,
+            const bool _syscall,
+            const bool _mprotect
+        ) :
+            memcpy(_memcpy),
+            syscall(_syscall),
+            mprotect(_mprotect) {}
+
+        asm_cfg_t(const std::initializer_list<std::pair<asm_flag_, bool>>& list) : asm_cfg_t() {
+            for (const auto& pair : list) {
+                const auto& flag = pair.first;
+                const auto& val = pair.second;
+
+                switch (flag) {
+                    case asm_none_func: break;
+
+                    case asm_memcpy: memcpy = val;
+                        break;
+                    case asm_syscall: syscall = val;
+                        break;
+                    case asm_mprotect: mprotect = val;
+                        break;
+
+                    default: break;
+                }
+            }
+        }
+    };
+
+    using fn_asm_cfg = const asm_cfg_t;
+
+    enum byte_endian_ : uint8_t {
+        little_endian,
+        big_endian
+    };
+
+    using fn_byte_endian = const byte_endian_;
+    constexpr byte_endian_ default_endian = ZUMTLib_ENDIAN;
+}
+
+namespace ZUMTType {
     using Address_t = ZUMTLib_CFG_ADDRESS_TYPE;
     using Offset_t = ZUMTLib_CFG_OFFSET_TYPE;
     using String_t = std::string;
     using Prot_t = signed int;
     using Inode_t = ino_t;
 
-    struct asm_cfg_t {
-        bool memcpy : 1;
-        bool syscall : 1;
-        bool mprotect : 1;
-    };
-    using asm_cfg = const asm_cfg_t&;
-    asm_cfg asm_cfg_default() {
-        static constexpr asm_cfg_t default_cfg = {
-            ZUMTLib_CFG_DEFAULT_USE_ASM_MEMCPY,
-            ZUMTLib_CFG_DEFAULT_USE_ASM_SYSCALL,
-            ZUMTLib_CFG_DEFAULT_USE_ASM_MPROTECT
-        };
-        return default_cfg;
-    }
-
-    enum byte_endian_ : uint8_t {
-        little_endian,
-        big_endian
-    };
-    constexpr byte_endian_ default_endian = ZUMTLib_ENDIAN;
+    using Byte_t = std::uint8_t;
+    using Bytes_t = std::vector<Byte_t>;
 
     namespace alias {
         using BYTE = std::int8_t;
@@ -405,69 +481,129 @@ namespace ZUMTLib {
         using F = FLOAT;
         using E = DOUBLE;
         #endif
-    }
+    }}
+
+namespace ZUMTLib {
+    namespace Asm = ZUMTAsm;
+    namespace Tool = ZUMTTool;
+
+    auto self_maps = ZUMTLib_CFG_DEFAULT_SELF_MAPS;
+    auto self_cmdline = ZUMTLib_CFG_DEFAULT_SELF_CMDLINE;
+    auto bss_sign = ZUMTLib_CFG_DEFAULT_MODULE_BSS_SIGN;
+
+
+    using namespace ZUMTCfg;
+    using namespace ZUMTType;
 
     namespace details {
         inline String_t remove_spaces(const String_t& str) {
             String_t result = str;
             result.erase(
                 std::remove_if(
-                    result.begin(), result.end(),
+                    result.begin(),
+                    result.end(),
                     [](const unsigned char c) { return std::isspace(c); }
                 ),
-                result.end());
+                result.end()
+            );
             return result;
         }
+
+        inline Address_t align_down(const Address_t x, const Address_t align) {
+            return x & ~(align - 1); // NOLINT
+        }
+
+        inline Address_t align_up(const Address_t x, const Address_t align) {
+            return (x + align - 1) & ~(align - 1); // NOLINT
+        }
+
+        // ReSharper disable CppParameterMayBeConst
         inline void* configured_memcpy(
-            void* dst, const void* src, const size_t len,
-            asm_cfg asm_cfg = asm_cfg_default()
+            void* dst,
+            const void* src,
+            const std::size_t len,
+            fn_asm_cfg asm_cfg = {}
         ) noexcept {
             void* result{};
             if (asm_cfg.memcpy) {
-                if (len >= 128) { // NOLINT(*-branch-clone)
-                    result = ZUMTLib_memcpy_m(dst, src, len);
-                }
-                else {
-                    result = ZUMTLib_memcpy(dst, src, len);
-                }
-            }
-            else {
+                result = len >= 128 ? ZUMTLib_memcpy_m(dst, src, len) : ZUMTLib_memcpy(dst, src, len);;
+            } else {
                 result = STD_memcpy(dst, src, len);
             }
             return result;
         }
+
         inline int configured_mprotect(
-            void *addr, size_t len, int prot, // NOLINT
-            asm_cfg asm_cfg = asm_cfg_default()
+            void* addr,
+            std::size_t len,
+            int prot,
+            fn_asm_cfg asm_cfg = {}
         ) noexcept {
             return asm_cfg.mprotect
-                ? static_cast<int>(ZUMTLib_mprotect(addr, len, prot))
-                : UNISTD_mprotect(addr, len, prot);
+                       ? static_cast<int>(ZUMTLib_mprotect(addr, len, prot))
+                       : UNISTD_mprotect(addr, len, prot);
         }
+
         inline long configured_syscall(
-            long number,               // NOLINT
-            long a1, long a2, long a3, // NOLINT
-            long a4, long a5, long a6, // NOLINT
-            asm_cfg asm_cfg = asm_cfg_default()
+            long number,
+            long a1,
+            long a2,
+            long a3,
+            long a4,
+            long a5,
+            long a6,
+            fn_asm_cfg asm_cfg = {}
         ) noexcept {
             return asm_cfg.syscall
-                ? ZUMTLib_syscall(number, a1, a2, a3, a4, a5, a6)
-                : UNISTD_syscall(number, a1, a2, a3, a4, a5, a6);
+                       ? ZUMTLib_syscall(number, a1, a2, a3, a4, a5, a6)
+                       : UNISTD_syscall(number, a1, a2, a3, a4, a5, a6);
         }
+        // ReSharper enable CppParameterMayBeConst
     }
 
-    using Byte_t = std::uint8_t;
-    using Bytes_t = std::vector<Byte_t>;
+    struct BaseRange {
+        Address_t start;
+        Address_t end;
+    };
+
+    struct PageInfo : BaseRange {
+        std::size_t size;
+    };
+
+    struct ProtRange : BaseRange {
+        String_t perm;
+    };
+
+    inline long PageSize() noexcept {
+        static long ps = sysconf(_SC_PAGESIZE);
+        return ps > 0 ? ps : 4096; // fallback
+    }
+
+    inline PageInfo PageAlign(
+        const Address_t addr,
+        const std::size_t len
+    ) {
+        PageInfo result{};
+        const auto ps = static_cast<Address_t>(PageSize());
+
+        result.start = details::align_down(addr, ps);
+        result.end = details::align_up(addr + len, ps);
+        result.size = result.end - result.start;
+
+        return result;
+    }
 
     template <typename Type>
     Bytes_t ToBytes(
         const Type& value,
-        const byte_endian_ endian = default_endian,
-        asm_cfg asm_cfg = asm_cfg_default()
+        fn_byte_endian endian = default_endian,
+        fn_asm_cfg asm_cfg = {}
     ) {
         #if ZUMTLib_CFG_BYTES_CONVERT_MEMCPY_COPYABLE_CHECK
-        static_assert(std::is_trivially_copyable<Type>::value,
-                      "Type must be trivially copyable");
+        static_assert(
+            std::is_trivially_copyable<Type>::value,
+            "Type must be trivially copyable"
+        );
         #endif
 
         const std::size_t type_size = sizeof(Type);
@@ -485,12 +621,14 @@ namespace ZUMTLib {
     template <typename Type>
     Type BytesTo(
         const Bytes_t& bytes,
-        const byte_endian_ endian = default_endian,
-        asm_cfg asm_cfg = asm_cfg_default()
+        fn_byte_endian endian = default_endian,
+        fn_asm_cfg asm_cfg = {}
     ) {
         #if ZUMTLib_CFG_BYTES_CONVERT_MEMCPY_COPYABLE_CHECK
-        static_assert(std::is_trivially_copyable<Type>::value,
-                      "Type must be trivially copyable");
+        static_assert(
+            std::is_trivially_copyable<Type>::value,
+            "Type must be trivially copyable"
+        );
         #endif
 
         const std::size_t type_size = sizeof(Type);
@@ -510,7 +648,7 @@ namespace ZUMTLib {
         return value;
     }
 
-    String_t Bytes2Hex(const Bytes_t& bytes) {
+    inline String_t Bytes2Hex(const Bytes_t& bytes) {
         std::ostringstream oss;
         for (const uint8_t b : bytes) {
             oss << std::hex
@@ -525,6 +663,7 @@ namespace ZUMTLib {
 
     class BytesHEX {
         Bytes_t bytes;
+
     public:
         // ReSharper disable once CppNonExplicitConvertingConstructor
         BytesHEX(const char* hex) {
@@ -548,9 +687,11 @@ namespace ZUMTLib {
         std::size_t size() const noexcept {
             return bytes.size();
         }
+
         Byte_t* data() noexcept {
             return bytes.data();
         }
+
         const Byte_t* data() const noexcept {
             return bytes.data();
         }
@@ -558,26 +699,24 @@ namespace ZUMTLib {
         String_t hex() const {
             return Bytes2Hex(bytes);
         }
-        
+
         // ReSharper disable once CppNonExplicitConversionOperator
         operator const Bytes_t&() const noexcept {
             return bytes;
         }
-        
+
         // ReSharper disable once CppNonExplicitConversionOperator
         operator const Bytes_t*() const noexcept {
             return &bytes;
         }
+
+        Bytes_t& details_inside_data() noexcept {
+            return bytes;
+        }
     };
 
-    Bytes_t Hex2Bytes(const String_t& hex) {
-        BytesHEX bytesHex(hex);
-        return {bytesHex};
-    }
-
-    inline long PageSize() noexcept {
-        static long ps = sysconf(_SC_PAGESIZE);
-        return ps > 0 ? ps : 4096; // fallback
+    inline Bytes_t Hex2Bytes(const String_t& hex) {
+        return std::move(BytesHEX(hex).details_inside_data());
     }
 
     inline pid_t GetPid() noexcept {
@@ -603,7 +742,6 @@ namespace ZUMTLib {
                 pid = _pid;
                 const std::string _pid_str = std::to_string(pid);
                 if (!_pid_str.empty()) {
-
                     ((maps = _proc) += _pid_str) += _maps;
                     ((cmdline = _proc) += _pid_str) += _cmdline;
                 }
@@ -614,20 +752,23 @@ namespace ZUMTLib {
     struct ProcBasedClass {
     protected:
         const Proc_t* m_proc{};
+
     public:
         void ChangeProc(const Proc_t* proc = nullptr) noexcept {
             m_proc = proc;
         }
+
         ZUMTLib_NODISCARD const Proc_t* Proc() const noexcept {
             return m_proc;
         }
     };
 
-    static bool ReadBuffer(
+    static bool ReadPtr(
         const Address_t addr,
         void* buffer,
-        const std::size_t size, // NOLINT
-        asm_cfg asm_cfg = asm_cfg_default()
+        // NOLINTNEXTLINE
+        const std::size_t size,
+        fn_asm_cfg asm_cfg = {}
     ) noexcept {
         iovec local{};
         iovec remote{};
@@ -705,8 +846,7 @@ namespace ZUMTLib {
                         result = address;
                     }
                 }
-            }
-            else {
+            } else {
                 return address;
             }
         }
@@ -716,18 +856,13 @@ namespace ZUMTLib {
 
     inline bool IsPtrValid(const void* ptr, const std::size_t size = 1) noexcept {
         if (!ptr) return false;
-
-        const auto start = reinterpret_cast<Address_t>(ptr);
-        const auto end = start + size;
-
         const long ps = PageSize();
 
-        for (Address_t page = start & ~(ps - 1); page < end; page += ps) {
+        const auto info = PageAlign(reinterpret_cast<Address_t>(ptr), size);
+        for (Address_t page = info.start; page < info.end; page += ps) {
             unsigned char vec;
-            const int ret = mincore(reinterpret_cast<void*>(page), ps, &vec);
-            if (ret != 0 || (vec & 1) == 0) {
+            if (mincore(reinterpret_cast<void*>(page), ps, &vec) != 0 || (vec & 1) == 0)
                 return false;
-            }
         }
         return true;
     }
@@ -803,8 +938,7 @@ namespace ZUMTLib {
                         result = endAddr;
                     }
                 }
-            }
-            else {
+            } else {
                 result = endAddr;
             }
         }
@@ -814,7 +948,7 @@ namespace ZUMTLib {
 
     using name_addr_pairs = std::initializer_list<std::pair<const char*, Address_t*>>;
 
-    template<typename Rep, typename Period>
+    template <typename Rep, typename Period>
     bool AskLibBase(
         const char* name,
         Address_t* out,
@@ -830,7 +964,7 @@ namespace ZUMTLib {
         return true;
     }
 
-    template<typename Rep, typename Period>
+    template <typename Rep, typename Period>
     bool AskLibBase(
         const name_addr_pairs& name_out_pair,
         const std::chrono::duration<Rep, Period>& sleep_time = std::chrono::seconds(1)
@@ -840,7 +974,7 @@ namespace ZUMTLib {
         return true;
     }
 
-    template<typename Rep, typename Period>
+    template <typename Rep, typename Period>
     bool AskLibEnd(
         const char* name,
         Address_t* out,
@@ -856,7 +990,7 @@ namespace ZUMTLib {
         return true;
     }
 
-    template<typename Rep, typename Period>
+    template <typename Rep, typename Period>
     bool AskLibEnd(
         const name_addr_pairs& name_out_pair,
         const std::chrono::duration<Rep, Period>& sleep_time = std::chrono::seconds(1)
@@ -883,62 +1017,66 @@ namespace ZUMTLib {
         return name;
     }
 
-    template<std::size_t bit>
+    template <std::size_t bit>
     class PtrLow {
         #if !ZUMTLib_CFG_DISABLE_PtrLow_CHECK_BITS
         static_assert(bit <= ZUMTLib_BIT, "You truncated more bits than the platform limit, are you sure?");
         #endif
         Address_t local;
+
     public:
-        PtrLow() noexcept: local(0) {}
+        PtrLow() noexcept : local(0) {}
+
         explicit PtrLow(const Address_t address) noexcept {
             Address_t value = 0;
-            ReadBuffer(address, &value, ZUMTLib_PTR_BYTE);
+            ReadPtr(address, &value, ZUMTLib_PTR_BYTE);
             local = value & ((1ULL << bit) - 1);
         }
-        explicit PtrLow(void* ptr) noexcept: PtrLow(reinterpret_cast<Address_t>(ptr)) {}
+
+        explicit PtrLow(void* ptr) noexcept : PtrLow(reinterpret_cast<Address_t>(ptr)) {}
+
         PtrLow(const Address_t start, const std::initializer_list<Offset_t>& il) {
             if (il.size()) {
                 *this = PtrLow(start);
-            }
-            else if (il.size() == 1) {
+            } else if (il.size() == 1) {
                 *this = PtrLow(start + *il.begin());
-            }
-            else {
+            } else {
                 std::size_t idx{};
                 local = 0;
                 // aco = address_chain_offset
                 for (auto& aco : il) {
                     if (idx == 0) {
                         *this = PtrLow(start + aco);
-                    }
-                    else if (idx == il.size() - 1) {
+                    } else if (idx == il.size() - 1) {
                         ToOffset(aco);
-                    }
-                    else {
+                    } else {
                         ToNext(aco);
                     }
                     idx++;
                 }
             }
         }
+
         PtrLow(
             const String_t& name,
             const std::initializer_list<Offset_t>& il
         )
             : PtrLow(GetModuleBase(name), il) {}
+
         PtrLow(const Address_t address, const Offset_t offset) : PtrLow(address) {
             ToNext(offset);
         }
+
     private:
         PtrLow(const Address_t value, const bool is_value) noexcept {
             if (is_value) local = value & ((1ULL << bit) - 1);
         }
+
     public:
         ZUMTLib_NODISCARD PtrLow Next(const Offset_t offset = 0) const noexcept {
             const Address_t addr = (local & ((1ULL << bit) - 1)) + offset;
             Address_t value = 0;
-            ReadBuffer(addr, &value, ZUMTLib_PTR_BYTE);
+            ReadPtr(addr, &value, ZUMTLib_PTR_BYTE);
             return PtrLow(value, true);
         }
 
@@ -961,6 +1099,7 @@ namespace ZUMTLib {
         PtrLow operator+(const Offset_t offset) const noexcept { return Offset(offset); }
         PtrLow& operator+=(const Offset_t offset) noexcept { return ToOffset(offset); }
         PtrLow operator-(const Offset_t offset) const noexcept { return Offset(-offset); }
+
         PtrLow& operator-=(const Offset_t offset) {
             this->local -= offset;
             return *this;
@@ -1010,27 +1149,19 @@ namespace ZUMTLib {
         Prot_t res = 0;
         if (!in.empty()) {
             if (/*in.size() >= 1 &&*/ in[0] == 'r') res |= PROT_READ;
-            if (  in.size() >= 2 &&   in[1] == 'w') res |= PROT_WRITE;
-            if (  in.size() >= 3 &&   in[2] == 'x') res |= PROT_EXEC;
+            if (in.size() >= 2 && in[1] == 'w') res |= PROT_WRITE;
+            if (in.size() >= 3 && in[2] == 'x') res |= PROT_EXEC;
         }
         return res;
     }
 
-    struct BaseRange {
-        Address_t start;
-        Address_t end;
-    };
-
-    struct ProtRange : BaseRange {
-        String_t perm;
-    };
-
     class ProtGuard : ProcBasedClass {
-        void* m_addr{};
+        void* m_ptr{};
         std::size_t m_size{};
         Prot_t m_orig{};
         bool state{true};
-        asm_cfg_t asm_cfg = asm_cfg_default();
+        asm_cfg_t asm_cfg = {};
+
     protected:
         std::vector<ProtRange> m_tbl{};
         bool m_tblValid{false};
@@ -1077,7 +1208,7 @@ namespace ZUMTLib {
         ProtGuard() noexcept = default;
 
         void operator()(void* addr, const std::size_t sz, const Prot_t prot, const Proc_t* proc = nullptr) noexcept {
-            m_addr = addr;
+            m_ptr = addr;
             m_size = sz;
             m_orig = prot;
             m_proc = proc;
@@ -1090,16 +1221,11 @@ namespace ZUMTLib {
         void operator()(void* addr, const std::size_t sz, const Proc_t* proc = nullptr) noexcept {
             if (!addr || sz == 0) return;
 
-            const long ps = PageSize();
-
-            const auto start = reinterpret_cast<Address_t>(addr) & ~(ps - 1);
-            // ReSharper disable once CppRedundantParentheses
-            const auto end = (reinterpret_cast<Address_t>(addr) + sz + ps - 1) & ~(ps - 1);
-
             m_proc = proc;
 
-            m_addr = reinterpret_cast<void*>(start);
-            m_size = end - start;
+            const auto page = PageAlign(reinterpret_cast<Address_t>(addr), sz);
+            m_ptr = reinterpret_cast<void*>(page.start);
+            m_size = page.size;
 
             m_orig = LookupPerm(addr);
         }
@@ -1108,14 +1234,14 @@ namespace ZUMTLib {
             (*this)(addr, sz, proc);
         }
 
-        void Set_asm_mprotect(const bool to) {
-            asm_cfg.mprotect = to;
+        void Set_asm_cfg(fn_asm_cfg to) {
+            asm_cfg = to;
         }
 
         void Restore() noexcept {
             if (!state) return;
-            if (m_addr && m_size > 0) {
-                details::configured_mprotect(m_addr, m_size, m_orig, asm_cfg);
+            if (m_ptr && m_size > 0) {
+                details::configured_mprotect(m_ptr, m_size, m_orig, asm_cfg);
             }
             state = false;
         }
@@ -1125,8 +1251,8 @@ namespace ZUMTLib {
         }
 
         ZUMTLib_NODISCARD bool make(const Prot_t prot) const noexcept {
-            if (!m_addr || m_size == 0) return false;
-            return details::configured_mprotect(m_addr, m_size, prot, asm_cfg) == 0;
+            if (!m_ptr || m_size == 0) return false;
+            return details::configured_mprotect(m_ptr, m_size, prot, asm_cfg) == 0;
         }
 
         void RefreshTblManual() {
@@ -1137,9 +1263,12 @@ namespace ZUMTLib {
         ProtGuard& operator=(const ProtGuard&) = delete;
 
         ProtGuard(ProtGuard&& other) noexcept
-            : m_addr(other.m_addr), m_size(other.m_size), m_orig(other.m_orig),
-              m_tbl(std::move(other.m_tbl)), m_tblValid(other.m_tblValid) {
-            other.m_addr = nullptr;
+            : m_ptr(other.m_ptr),
+              m_size(other.m_size),
+              m_orig(other.m_orig),
+              m_tbl(std::move(other.m_tbl)),
+              m_tblValid(other.m_tblValid) {
+            other.m_ptr = nullptr;
             other.m_size = 0;
             other.m_orig = 0;
             other.m_tblValid = false;
@@ -1147,13 +1276,13 @@ namespace ZUMTLib {
 
         ProtGuard& operator=(ProtGuard&& other) noexcept {
             if (this != &other) {
-                m_addr = other.m_addr;
+                m_ptr = other.m_ptr;
                 m_size = other.m_size;
                 m_orig = other.m_orig;
                 m_tbl = std::move(other.m_tbl);
                 m_tblValid = other.m_tblValid;
 
-                other.m_addr = nullptr;
+                other.m_ptr = nullptr;
                 other.m_size = 0;
                 other.m_orig = 0;
                 other.m_tblValid = false;
@@ -1162,42 +1291,39 @@ namespace ZUMTLib {
         }
     };
 
-    class Addr {
+    class AddrBase {
     public:
         using base_type = Address_t;
-    private:
+
+    protected:
         base_type m_addr{};
 
-        ZUMTLib_NODISCARD void* pageStart() const noexcept {
-            return reinterpret_cast<void*>(m_addr & ~(PageSize() - 1));
-        }
-
     public:
-        Addr() noexcept = default;
-        explicit Addr(void* ptr) noexcept: m_addr(reinterpret_cast<base_type>(ptr)) {}
-        explicit Addr(const base_type addr) noexcept: m_addr(addr) {}
-        explicit Addr(const String_t& stringAddr) : m_addr(std::stoull(stringAddr)) {}
-        template<std::size_t bit>
-        explicit Addr(const PtrLow<bit>& obj) noexcept : Addr(obj.value()) {}
-        
+        // ReSharper disable CppNonExplicitConvertingConstructor
+        constexpr AddrBase() noexcept = default;
+        explicit constexpr AddrBase(const base_type addr) noexcept : m_addr(addr) {}
+        template <std::size_t bit> AddrBase(const PtrLow<bit>& obj) noexcept : AddrBase(obj.value()) {}
+        // ReSharper enable CppNonExplicitConvertingConstructor
+
         bool writeGuardFrom(
-            const void* buffer, const std::size_t length,
-            asm_cfg asm_cfg = asm_cfg_default(),
+            const void* buffer,
+            const std::size_t length,
+            fn_asm_cfg asm_cfg = {},
             const Proc_t* proc = nullptr
         ) const {
             if (!m_addr || !buffer || length == 0) return false;
 
             ProtGuard guard(ptr(), length, proc);
-            guard.Set_asm_mprotect(asm_cfg.mprotect);
+            guard.Set_asm_cfg(asm_cfg);
             if (!guard.make(PROT_READ | PROT_WRITE | PROT_EXEC))
                 return false;
             details::configured_memcpy(ptr(), buffer, length, asm_cfg);
             return true;
         }
-        
+
         bool writeGuardFrom(
             const Bytes_t* bytes,
-            asm_cfg asm_cfg = asm_cfg_default(),
+            fn_asm_cfg asm_cfg = {},
             const Proc_t* proc = nullptr
         ) const {
             return writeGuardFrom(bytes->data(), bytes->size(), asm_cfg, proc);
@@ -1205,77 +1331,73 @@ namespace ZUMTLib {
 
         bool writeGuardHex(
             const char* hex_bytes,
-            asm_cfg asm_cfg = asm_cfg_default(),
+            fn_asm_cfg asm_cfg = {},
             const Proc_t* proc = nullptr
         ) const {
             const BytesHEX bytes{hex_bytes};
-            return writeGuard(bytes, asm_cfg, proc);
+            return writeGuardFrom(bytes, asm_cfg, proc);
         }
-        
-        template<typename Type, std::size_t size = sizeof(Type)>
+
+        template <typename Type, std::size_t size = sizeof(Type)>
         bool writeGuard(
             const Type& value,
-            asm_cfg asm_cfg = asm_cfg_default(),
+            fn_asm_cfg asm_cfg = {},
             const Proc_t* proc = nullptr
         ) const {
             return writeGuardFrom(&value, size, asm_cfg, proc);
         }
 
         bool writeFrom(
-            const void* buffer, const std::size_t length,
-            asm_cfg asm_cfg = asm_cfg_default()
+            const void* buffer,
+            const std::size_t length,
+            fn_asm_cfg asm_cfg = {}
         ) const noexcept {
             if (!m_addr || !buffer || length == 0) return false;
 
-            void* p = ptr();
-
-            const long ps = PageSize();
-            const auto start = reinterpret_cast<Address_t>(p) & ~(ps - 1);
-            // ReSharper disable once CppRedundantParentheses
-            const auto end = (reinterpret_cast<Address_t>(p) + length + ps - 1) & ~(ps - 1);
-            const size_t size = end - start;
+            const auto page = PageAlign(m_addr, length);
             static Prot_t prot = PROT_READ | PROT_WRITE | PROT_EXEC;
-            if (details::configured_mprotect(reinterpret_cast<void*>(start), size, prot, asm_cfg) != 0) return false;
-            details::configured_memcpy(p, buffer, length, asm_cfg);
+            if (details::configured_mprotect(reinterpret_cast<void*>(page.start), page.size, prot, asm_cfg) != 0) return false;
+            details::configured_memcpy(ptr(), buffer, length, asm_cfg);
             return true;
         }
 
         bool writeFrom(
             const Bytes_t& bytes,
-            asm_cfg asm_cfg = asm_cfg_default()
+            fn_asm_cfg asm_cfg = {}
         ) const {
             return writeFrom(bytes.data(), bytes.size(), asm_cfg);
         }
 
         bool writeHex(
-            const std::string& hex_bytes,
-            asm_cfg asm_cfg = asm_cfg_default()
+            const char* hex_bytes,
+            fn_asm_cfg asm_cfg = {}
         ) const {
             const BytesHEX hex_arr{hex_bytes};
             return writeFrom(hex_arr, asm_cfg);
         }
 
-        template<typename Type, std::size_t size = sizeof(Type)>
+        template <typename Type, std::size_t size = sizeof(Type)>
         bool write(
             const Type& value,
-            asm_cfg asm_cfg = asm_cfg_default()
+            fn_asm_cfg asm_cfg = {}
         ) const noexcept {
             return writeFrom(&value, size, asm_cfg);
         }
 
         bool readTo(
-            void* buffer, const std::size_t length,
-            asm_cfg asm_cfg = asm_cfg_default()
+            void* buffer,
+            const std::size_t length,
+            fn_asm_cfg asm_cfg = {}
         ) const noexcept {
             if (!m_addr || !buffer || length == 0) return false;
             details::configured_memcpy(buffer, ptr(), length, asm_cfg);
             return true;
         }
 
-        template<typename Type, std::size_t size = sizeof(Type)>
+        template <typename Type, std::size_t size = sizeof(Type)>
         bool readTo(
             Type* buf,
-            asm_cfg asm_cfg = asm_cfg_default()
+            fn_asm_cfg asm_cfg = {}
         ) const noexcept {
             return readTo(reinterpret_cast<void*>(buf), size, asm_cfg);
         }
@@ -1283,7 +1405,7 @@ namespace ZUMTLib {
         bool readTo(
             Bytes_t& data,
             const std::size_t size,
-            asm_cfg asm_cfg = asm_cfg_default()
+            fn_asm_cfg asm_cfg = {}
         ) const {
             data.resize(size);
             return readTo(data.data(), size, asm_cfg);
@@ -1291,14 +1413,15 @@ namespace ZUMTLib {
 
         bool readTo(
             Bytes_t& data,
-            asm_cfg asm_cfg = asm_cfg_default()
-        ) const {;
+            fn_asm_cfg asm_cfg = {}
+        ) const {
+            ;
             return readTo(data.data(), data.size(), asm_cfg);
         }
 
-        template<std::size_t size>
+        template <std::size_t size>
         String_t readHex(
-            asm_cfg asm_cfg = asm_cfg_default()
+            fn_asm_cfg asm_cfg = {}
         ) const {
             Bytes_t data(size);
             if (readTo(data.data(), size, asm_cfg)) {
@@ -1306,30 +1429,26 @@ namespace ZUMTLib {
             }
             return {};
         }
-        
-        template<typename Type, std::size_t size = sizeof(Type)>
+
+        template <typename Type, std::size_t size = sizeof(Type)>
         Type read(
-            asm_cfg asm_cfg = asm_cfg_default()
+            fn_asm_cfg asm_cfg = {}
         ) const noexcept {
             Type result{};
             readTo(reinterpret_cast<void*>(&result), size, asm_cfg);
             return result;
         }
 
-        template<std::size_t size>
+        template <std::size_t size>
         Bytes_t read(
-            asm_cfg asm_cfg = asm_cfg_default()
+            fn_asm_cfg asm_cfg = {}
         ) const {
             Bytes_t bytes{};
             readTo(bytes, size, asm_cfg);
             return bytes;
         }
 
-        ZUMTLib_NODISCARD base_type address() const noexcept {
-            return m_addr;
-        }
-
-        ZUMTLib_NODISCARD base_type operator*() const noexcept {
+        ZUMTLib_NODISCARD base_type get() const noexcept {
             return m_addr;
         }
 
@@ -1337,69 +1456,417 @@ namespace ZUMTLib {
             return reinterpret_cast<void*>(m_addr);
         }
 
-        // ReSharper disable once CppNonExplicitConversionOperator
-        operator base_type() const noexcept {
-            return address();
+        /* 此处不表示 按位取反，如需要地址按位取反清使用"~~"或者".NOT成员" */
+        ZUMTLib_NODISCARD base_type operator~() const noexcept {
+            return m_addr;
         }
 
-        ZUMTLib_NODISCARD Addr alignUp(const base_type alignment) const noexcept {
-            return Addr((m_addr + alignment - 1) & ~(alignment - 1));
+        ZUMTLib_NODISCARD base_type NOT() const noexcept {
+            return ~m_addr;
         }
-        ZUMTLib_NODISCARD Addr alignDown(const base_type alignment) const noexcept {
-            return Addr(m_addr & ~(alignment - 1));
+
+        // ReSharper disable once CppNonExplicitConversionOperator
+        operator base_type() const noexcept {
+            return m_addr;
         }
-        Addr operator+(const base_type offset) const noexcept {
-            return Addr(m_addr + offset);
+
+        base_type operator()() const noexcept {
+            return m_addr;
         }
-        Addr operator-(const base_type offset) const noexcept {
-            return Addr(m_addr - offset);
+
+        ZUMTLib_NODISCARD AddrBase alignUp(const base_type alignment) const noexcept {
+            return AddrBase((m_addr + alignment - 1) & ~(alignment - 1));
         }
-        Addr& operator+=(const base_type offset) noexcept {
+
+        ZUMTLib_NODISCARD AddrBase alignDown(const base_type alignment) const noexcept {
+            return AddrBase(m_addr & ~(alignment - 1));
+        }
+
+        AddrBase operator+(const base_type offset) const noexcept {
+            return AddrBase(m_addr + offset);
+        }
+
+        AddrBase operator-(const base_type offset) const noexcept {
+            return AddrBase(m_addr - offset);
+        }
+
+        AddrBase& operator+=(const base_type offset) noexcept {
             m_addr += offset;
             return *this;
         }
-        Addr& operator-=(const base_type offset) noexcept {
+
+        AddrBase& operator-=(const base_type offset) noexcept {
             m_addr -= offset;
             return *this;
         }
-        Addr operator&(const base_type mask) const noexcept { return Addr(m_addr & mask); }
-        Addr operator|(const base_type mask) const noexcept { return Addr(m_addr | mask); }
-        Addr operator^(const base_type mask) const noexcept { return Addr(m_addr ^ mask); }
 
-        Addr& operator&=(const base_type mask) noexcept {
+        AddrBase operator&(const base_type mask) const noexcept { return AddrBase(m_addr & mask); }
+        AddrBase operator|(const base_type mask) const noexcept { return AddrBase(m_addr | mask); }
+        AddrBase operator^(const base_type mask) const noexcept { return AddrBase(m_addr ^ mask); }
+
+        AddrBase& operator&=(const base_type mask) noexcept {
             m_addr &= mask;
             return *this;
         }
-        Addr& operator|=(const base_type mask) noexcept {
+
+        AddrBase& operator|=(const base_type mask) noexcept {
             m_addr |= mask;
             return *this;
         }
-        Addr& operator^=(const base_type mask) noexcept {
+
+        AddrBase& operator^=(const base_type mask) noexcept {
             m_addr ^= mask;
             return *this;
         }
-        Addr operator<<(const unsigned shift) const noexcept {
-            return Addr(m_addr << shift);
+
+        AddrBase operator<<(const unsigned shift) const noexcept {
+            return AddrBase(m_addr << shift);
         }
-        Addr operator>>(const unsigned shift) const noexcept {
-            return Addr(m_addr >> shift);
+
+        AddrBase operator>>(const unsigned shift) const noexcept {
+            return AddrBase(m_addr >> shift);
         }
-        Addr& operator<<=(const unsigned shift) noexcept {
+
+        AddrBase& operator<<=(const unsigned shift) noexcept {
             m_addr <<= shift;
             return *this;
         }
-        Addr& operator>>=(const unsigned shift) noexcept {
+
+        AddrBase& operator>>=(const unsigned shift) noexcept {
             m_addr >>= shift;
             return *this;
         }
 
-        bool operator==(const Addr& other) const noexcept { return m_addr == other.m_addr; }
-        bool operator!=(const Addr& other) const noexcept { return m_addr != other.m_addr; }
-        bool operator<(const Addr& other) const noexcept { return m_addr < other.m_addr; }
-        bool operator>(const Addr& other) const noexcept { return m_addr > other.m_addr; }
+        bool operator==(const AddrBase& other) const noexcept { return m_addr == other.m_addr; }
+        bool operator!=(const AddrBase& other) const noexcept { return m_addr != other.m_addr; }
+        bool operator<(const AddrBase& other) const noexcept { return m_addr < other.m_addr; }
+        bool operator>(const AddrBase& other) const noexcept { return m_addr > other.m_addr; }
 
         // ReSharper disable once CppNonExplicitConversionOperator
         operator bool() const noexcept { return m_addr != 0; }
+    };
+
+    class VFunction {
+    protected:
+        void** m_vfunc_ptr;
+
+        VFunction() = default;
+    public:
+        VFunction(const Address_t vfunc_addr) {
+            if (vfunc_addr == 0)
+                throw std::invalid_argument("vtable_addr is null");
+            const auto vtable_ptr = reinterpret_cast<void**>(vfunc_addr);
+            if (*vtable_ptr) {
+                m_vfunc_ptr = vtable_ptr;
+            }
+        }
+
+        VFunction(void** vfunc_ptr) {
+            if (vfunc_ptr && *vfunc_ptr) m_vfunc_ptr = vfunc_ptr;
+            else throw std::invalid_argument("func_ptr or func is null");
+        }
+
+        VFunction(void** vtable_ptr, const std::size_t idx) {
+            if (vtable_ptr && vtable_ptr[idx]) m_vfunc_ptr = &vtable_ptr[idx];
+            else throw std::invalid_argument("vtable_ptr or vtable[idx] is null");
+        }
+
+        void* func() const noexcept {
+            return *m_vfunc_ptr;
+        }
+
+        void** ptr() const noexcept {
+            return m_vfunc_ptr;
+        }
+
+        std::size_t index(void** vtable) const {
+            return ptr() - vtable;
+        }
+
+        Address_t addr() const noexcept {
+            return reinterpret_cast<Address_t>(ptr());
+        }
+
+        bool write(
+            void* new_func,
+            fn_asm_cfg asm_cfg = {},
+            const Proc_t* proc = nullptr
+        ) const {
+            if (!ptr() || !new_func) return false;
+
+            ProtGuard guard(ptr(), ZUMTLib_PTR_BYTE, proc);
+            guard.Set_asm_cfg(asm_cfg);
+            if (!guard.make(PROT_READ | PROT_WRITE | PROT_EXEC))
+                return false;
+            *ptr() = new_func;
+            return true;
+        }
+
+        bool writeNoGuard(
+            void* new_func,
+            fn_asm_cfg asm_cfg = {}
+        ) const {
+            if (!ptr() || !new_func) return false;
+
+            const auto page = PageAlign(addr(), ZUMTLib_PTR_BYTE);
+            static Prot_t prot = PROT_READ | PROT_WRITE | PROT_EXEC;
+            if (details::configured_mprotect(reinterpret_cast<void*>(page.start), page.size, prot, asm_cfg) != 0) return false;
+            *ptr() = new_func;
+            return true;
+        }
+
+        bool read(void** buffer) const {
+            if (!ptr() || !buffer) return false;
+            *buffer = func();
+            return true;
+        }
+
+        void* read() const {
+            return func();
+        }
+
+        bool valid() const noexcept {
+            return m_vfunc_ptr && *m_vfunc_ptr;
+        }
+
+        bool hook(
+            void* hsub,
+            void** osub = nullptr,
+            fn_asm_cfg asm_cfg = {},
+            const Proc_t* proc = nullptr
+        ) const {
+            if (!ptr() || !hsub) return false;
+            if (func() == hsub) return false;
+            void* orig = func();
+            if (write(hsub, asm_cfg, proc)) {
+                if (osub) *osub = orig;
+                return true;
+            }
+            return false;
+        }
+
+        bool hookNoGuard(
+            void* hsub,
+            void** osub = nullptr,
+            fn_asm_cfg asm_cfg = {}
+        ) const {
+            if (!ptr() || !hsub) return false;
+            if (func() == hsub) return false;
+            void* orig = func();
+            if (writeNoGuard(hsub, asm_cfg)) {
+                if (osub) *osub = orig;
+                return true;
+            }
+            return false;
+        }
+    };
+
+    inline bool VFuncHook(
+        const VFunction& vf,
+        void* hsub,
+        void** osub = nullptr,
+        fn_asm_cfg asm_cfg = {},
+        const Proc_t* proc = nullptr
+    ) {
+        return vf.hook(hsub, osub, asm_cfg, proc);
+    }
+
+    inline bool VFuncHookNoGuard(
+        const VFunction& vf,
+        void* hsub,
+        void** osub = nullptr,
+        fn_asm_cfg asm_cfg = {}
+    ) {
+        return vf.hookNoGuard(hsub, osub, asm_cfg);
+    }
+
+    class VFuncHookRAII {
+        const Proc_t* m_proc;
+        VFunction m_vf;
+        void* m_osub{};
+        bool m_hooked{};
+        asm_cfg_t m_asm_cfg;
+    public:
+        void* osub() const noexcept {
+            return m_osub;
+        }
+
+        bool Hooked() const noexcept {
+            return m_hooked;
+        }
+
+        bool Hook(void* hsub) {
+            if (!m_hooked) {
+                m_hooked = m_vf.hook(hsub, &m_osub, m_asm_cfg, m_proc);
+            }
+            return m_hooked;
+        }
+
+        bool DeHook() {
+            if (m_hooked) {
+                if (m_vf.write(m_osub, m_asm_cfg, m_proc)) {
+                    m_osub = nullptr;
+                    m_hooked = false;
+                    return true;
+                }
+                return false;
+            }
+            return true;
+        }
+
+        bool ReHook(void* hsub) {
+            return DeHook() ? Hook(hsub) : false;
+        }
+
+        VFuncHookRAII(
+            const VFunction& vf,
+            fn_asm_cfg asm_cfg = {},
+            const Proc_t* proc = nullptr
+        ) : m_proc(proc), m_vf(vf), m_asm_cfg(asm_cfg) {}
+
+        VFuncHookRAII(
+            const VFunction& vf,
+            void* hsub,
+            fn_asm_cfg asm_cfg = {},
+            const Proc_t* proc = nullptr
+        ) : m_proc(proc), m_vf(vf), m_asm_cfg(asm_cfg) {
+            Hook(hsub);
+        }
+
+        ~VFuncHookRAII() {
+            DeHook();
+        }
+    };
+
+    class VFuncHookNoGuardRAII {
+        VFunction m_vf;
+        void* m_osub{};
+        bool m_hooked{};
+        asm_cfg_t m_asm_cfg;
+    public:
+        void* osub() const noexcept {
+            return m_osub;
+        }
+
+        bool Hooked() const noexcept {
+            return m_hooked;
+        }
+
+        bool Hook(void* hsub) {
+            if (!m_hooked) {
+                m_hooked = m_vf.hookNoGuard(hsub, &m_osub, m_asm_cfg);
+            }
+            return m_hooked;
+        }
+
+        bool DeHook() {
+            if (m_hooked) {
+                if (m_vf.writeNoGuard(m_osub, m_asm_cfg)) {
+                    m_osub = nullptr;
+                    m_hooked = false;
+                    return true;
+                }
+                return false;
+            }
+            return true;
+        }
+
+        bool ReHook(void* hsub) {
+            return DeHook() ? Hook(hsub) : false;
+        }
+
+        VFuncHookNoGuardRAII(
+            const VFunction& vf,
+            fn_asm_cfg asm_cfg = {}
+        ) : m_vf(vf), m_asm_cfg(asm_cfg) {}
+
+        VFuncHookNoGuardRAII(
+            const VFunction& vf,
+            void* hsub,
+            fn_asm_cfg asm_cfg = {}
+        ) : m_vf(vf), m_asm_cfg(asm_cfg) {
+            Hook(hsub);
+        }
+
+        ~VFuncHookNoGuardRAII() {
+            DeHook();
+        }
+    };
+
+    class VTable {
+        void** m_vtable;
+    public:
+        VTable(const Address_t vtable_addr) {
+            if (vtable_addr == 0)
+                throw std::invalid_argument("vtable_addr is null");
+            const auto vtable_ptr = reinterpret_cast<void**>(vtable_addr);
+            if (*vtable_ptr) {
+                m_vtable = vtable_ptr;
+            }
+        }
+
+        VTable(void** vtable_ptr) {
+            if (vtable_ptr && *vtable_ptr) m_vtable = vtable_ptr;
+            else throw std::invalid_argument("vtable is null");
+        }
+
+        template <typename Class,
+                  typename = typename std::enable_if<
+                      std::is_polymorphic<typename std::remove_reference<Class>::type>::value
+                  >::type> VTable(Class* const obj) {
+            if (!obj) {
+                throw std::invalid_argument("object is null");
+            }
+
+            m_vtable = *reinterpret_cast<void***>(obj);
+            if (!m_vtable) {
+                throw std::invalid_argument("vtable is null");
+            }
+        }
+
+        void** vtable() const noexcept {
+            return m_vtable;
+        }
+
+        VFunction at(const std::size_t idx) const noexcept {
+            return {vtable(), idx};
+        }
+
+        VFunction operator[](const std::size_t idx) const noexcept {
+            return at(idx);
+        }
+    };
+
+    template <typename Class,
+              typename = typename std::enable_if<
+                  std::is_polymorphic<typename std::remove_reference<Class>::type>::value
+              >::type> Class* PolyCall(Class& clazz) {
+        return &clazz;
+    }
+
+    class AddrPtr : public AddrBase {
+    public:
+        using BasedClass = AddrBase;
+        using BasedClass::AddrBase;
+
+        AddrPtr(void* ptr) noexcept : AddrBase(reinterpret_cast<base_type>(ptr)) {}
+    };
+
+    class AddrString : public AddrBase {
+    public:
+        using BasedClass = AddrBase;
+        using BasedClass::AddrBase;
+
+        AddrString(const String_t& str_addr) : AddrBase(std::stoull(str_addr, nullptr, 16)) {}
+    };
+
+    class Addr : public AddrBase {
+    public:
+        using BasedClass = AddrBase;
+        using BasedClass::AddrBase;
+
+        explicit Addr(void* ptr) noexcept : AddrBase(reinterpret_cast<base_type>(ptr)) {}
+        explicit Addr(const String_t& str_addr) : AddrBase(std::stoull(str_addr, nullptr, 16)) {}
     };
 
     struct AddrRange {
@@ -1415,6 +1882,7 @@ namespace ZUMTLib {
         String_t m_dev;
         Inode_t m_inode{};
         String_t m_path;
+
     public:
         Module* Self() noexcept {
             return this;
@@ -1423,7 +1891,8 @@ namespace ZUMTLib {
         Module() = default;
 
         const Module& Scan(
-            const String_t& targetName, bool merge = false
+            const String_t& targetName,
+            bool merge = false
         ) noexcept {
             try {
                 std::ifstream maps(m_proc ? m_proc->maps : self_maps);
@@ -1442,7 +1911,6 @@ namespace ZUMTLib {
                     String_t path;
                     std::getline(iss, path);
                     if (!path.empty() && path.find(targetName) != String_t::npos) {
-
                         std::size_t dash = addr.find('-');
                         Addr start(std::stoull(addr.substr(0, dash), nullptr, 16));
                         Addr end(std::stoull(addr.substr(dash + 1), nullptr, 16));
@@ -1462,8 +1930,7 @@ namespace ZUMTLib {
                         if (merge) {
                             m_range.start = firstStart;
                             m_range.end = end;
-                        }
-                        else {
+                        } else {
                             m_range.start = start;
                             m_range.end = end;
                             break;
@@ -1501,13 +1968,13 @@ namespace ZUMTLib {
             const Inode_t inode,
             String_t path,
             const Proc_t* proc = nullptr
-        ) noexcept: m_name(std::move(name)),
-                    m_range(range),
-                    m_perms(std::move(perms)),
-                    m_offset(offset),
-                    m_dev(std::move(dev)),
-                    m_inode(inode),
-                    m_path(std::move(path)) {
+        ) noexcept : m_name(std::move(name)),
+                     m_range(range),
+                     m_perms(std::move(perms)),
+                     m_offset(offset),
+                     m_dev(std::move(dev)),
+                     m_inode(inode),
+                     m_path(std::move(path)) {
             m_proc = proc;
         }
 
@@ -1630,8 +2097,7 @@ namespace ZUMTLib {
                             path
                         );
                         moduleMap[path] = mod;
-                    }
-                    else {
+                    } else {
                         it->second.range().end = end;
                     }
                 }
@@ -1683,7 +2149,7 @@ namespace ZUMTLib {
         const MapRegions& maps
     ) {
         for (const auto& r : maps) {
-            if (addr >= r.start.address() && addr < r.end.address()) {
+            if (addr >= ~r.start && addr < ~r.end) {
                 return !r.perms.empty() && r.perms[0] == 'r';
             }
         }
@@ -1696,7 +2162,7 @@ namespace ZUMTLib {
         const AddrRange& range,
         const String_t& outPath,
         Addr::base_type chunkSize = 0,
-        asm_cfg asm_cfg = asm_cfg_default()
+        asm_cfg asm_cfg = {}
     ) {
         std::ofstream ofs(outPath, std::ios::binary);
         if (!ofs) return false;
@@ -1725,7 +2191,6 @@ namespace ZUMTLib {
             if (!currentRegion ||
                 addr < currentRegion->start.address() ||
                 addr >= currentRegion->end.address()) {
-
                 currentRegion = nullptr;
 
                 for (const auto& r : maps) {
@@ -1741,8 +2206,7 @@ namespace ZUMTLib {
             if (readable) {
                 details::configured_memcpy(buffer.data(), ptr, size, asm_cfg);
                 ofs.write(buffer.data(), static_cast<std::streamsize>(size));
-            }
-            else {
+            } else {
                 ofs.write(zeros.data(), static_cast<std::streamsize>(size));
             }
 
@@ -1758,13 +2222,20 @@ namespace ZUMTLib {
         inline Module operator""_Module(const char* name) {
             return Module{name};
         }
-        inline Addr operator""_Addr(const unsigned long long address) {
-            return Addr{static_cast<Address_t>(address)};
+
+        inline AddrBase operator""_Addr(const unsigned long long address) {
+            return AddrBase{static_cast<Address_t>(address)};
         }
+
         inline Offset_t operator""_Offset(const unsigned long long address) {
             return address;
         }
     }
+
+    constexpr auto AUTHOR_NAME = "江芷酱紫";
+    constexpr auto PROJECT_NAME = "ZUMTLib";
+    constexpr auto PROJECT_VERSION = "1.2.0";
+    constexpr auto PROJECT_VERSION_CODE = 10200;
 }
 #pragma clang diagnostic pop
 #endif //ZUMTLib_HPP
