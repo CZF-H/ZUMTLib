@@ -46,8 +46,11 @@
 // Bytes_t 操作 memcpy copyable 检查
 #define ZUMTLib_CFG_BYTES_CONVERT_MEMCPY_COPYABLE_CHECK false
 
-// 开启语法 using ZUMTLib_Alias;
-#define ZUMTLib_CFG_USING_ZUMTLib_Alias true
+// 开启语法 using ZUMTType_Alias;
+#define ZUMTLib_CFG_USING_ZUMTType_Alias true
+
+// 开启语法 using ZUMTConfig;
+#define ZUMTLib_CFG_USING_ZUMTConfig true
 
 // 开启语法 using ZUMTLib_Literals;
 #define ZUMTLib_CFG_USING_ZUMTLib_Literals true
