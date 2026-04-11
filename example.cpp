@@ -248,6 +248,19 @@ int wr_test() {
     return 0;
 }
 
+int ty_test() {
+    using namespace ZUMTLib;
+    using namespace ZUMTLib::literals;
+
+    using DataType = BYTE_DATA<1>;
+    DataType data = true;
+    DataType* data_ptr = &data;
+
+    std::cout << byte_data_force_convert<uint64_t>(byte_data_force_cast<QWORD>(*data_ptr)) << std::endl;
+
+    return 0;
+}
+
 int main() {
-    return wr_test();
+    return ty_test();
 }

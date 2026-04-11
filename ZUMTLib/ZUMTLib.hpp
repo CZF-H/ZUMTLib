@@ -443,80 +443,9 @@ namespace ZUMTCfg {
     constexpr byte_endian_ default_endian = ZUMTLib_ENDIAN;
 }
 
-namespace ZUMTType {
-    using Address_t = ZUMTLib_CFG_ADDRESS_TYPE;
-    using Offset_t = ZUMTLib_CFG_OFFSET_TYPE;
-    using String_t = std::string;
-    using Prot_t = signed int;
-    using Inode_t = ino_t;
-
-    using Byte_t = std::uint8_t;
-    using Bytes_t = std::vector<Byte_t>;
-
-    namespace alias {
-        using BYTE = std::int8_t;
-        using WORD = std::int16_t;
-        using DWORD = std::int32_t;
-        using QWORD = std::int64_t;
-        using FLOAT = float;
-        using DOUBLE = double;
-
-        #if ZUMTLib_CFG_USE_IDA_TYPE
-
-        #endif
-
-        #if ZUMTLib_CFG_USE_MSVC_TYPE
-
-        #endif
-
-        #if ZUMTLib_CFG_USE_GCC_TYPE
-
-        #endif
-
-        #if ZUMTLib_CFG_USE_GG_TYPE
-        using B = BYTE;
-        using W = WORD;
-        using D = DWORD;
-        using Q = QWORD;
-        using F = FLOAT;
-        using E = DOUBLE;
-        #endif
-    }}
-
 namespace ZUMTLib {
-    namespace Asm = ZUMTAsm;
-    namespace Tool = ZUMTTool;
-
-    auto self_maps = ZUMTLib_CFG_DEFAULT_SELF_MAPS;
-    auto self_cmdline = ZUMTLib_CFG_DEFAULT_SELF_CMDLINE;
-    auto bss_sign = ZUMTLib_CFG_DEFAULT_MODULE_BSS_SIGN;
-
-
-    using namespace ZUMTCfg;
-    using namespace ZUMTType;
-
     namespace details {
-        inline String_t remove_spaces(const String_t& str) {
-            String_t result = str;
-            result.erase(
-                std::remove_if(
-                    result.begin(),
-                    result.end(),
-                    [](const unsigned char c) { return std::isspace(c); }
-                ),
-                result.end()
-            );
-            return result;
-        }
-
-        inline Address_t align_down(const Address_t x, const Address_t align) {
-            return x & ~(align - 1); // NOLINT
-        }
-
-        inline Address_t align_up(const Address_t x, const Address_t align) {
-            return (x + align - 1) & ~(align - 1); // NOLINT
-        }
-
+        using ZUMTCfg::fn_asm_cfg;
         // ReSharper disable CppParameterMayBeConst
         inline void* configured_memcpy(
             void* dst,
@@ -558,7 +487,234 @@ namespace ZUMTLib {
                        ? ZUMTLib_syscall(number, a1, a2, a3, a4, a5, a6)
                        : UNISTD_syscall(number, a1, a2, a3, a4, a5, a6);
         }
+
         // ReSharper enable CppParameterMayBeConst
+
+        constexpr std::size_t next_pow2(std::size_t x) {
+            return x <= 1 ? 1 : (static_cast<std::size_t>(1) << (sizeof(std::size_t) * 8 - __builtin_clzll(x - 1)));
+        }
+        constexpr std::size_t is_pow2(std::size_t x) {
+            return x && !(x & (x - 1));
+        }
+        constexpr std::size_t clamp_align(std::size_t x) {
+            return x > alignof(std::max_align_t)
+                ? alignof(std::max_align_t)
+                : x;
+        }
+        constexpr std::size_t compute_align(std::size_t x) {
+            return clamp_align(is_pow2(x) ? x : next_pow2(x));
+        }
+    }
+}
+
+namespace ZUMTType {
+    using Address_t = ZUMTLib_CFG_ADDRESS_TYPE;
+    using Offset_t = ZUMTLib_CFG_OFFSET_TYPE;
+    using String_t = std::string;
+    using Prot_t = signed int;
+    using Inode_t = ino_t;
+
+    using Byte_t = std::uint8_t;
+    using Bytes_t = std::vector<Byte_t>;
+
+    namespace alias {
+        #if ZUMTLib_CFG_USE_IDA_TYPE
+
+        #endif
+
+        #if ZUMTLib_CFG_USE_MSVC_TYPE
+        using BYTE = unsigned char;
+        using WORD = unsigned short;
+        using DWORD = unsigned long;
+        using QWORD = unsigned long long;
+        using FLOAT = float;
+        using DOUBLE = double;
+        #endif
+
+        #if ZUMTLib_CFG_USE_GCC_TYPE
+
+        #endif
+
+        #if ZUMTLib_CFG_USE_GG_TYPE
+        using B = std::int8_t;
+        using W = std::int16_t;
+        using D = std::int32_t;
+        using Q = std::int64_t;
+        using F = float;
+        using E = double;
+        #endif
+    }
+
+    using ZUMTLib::details::compute_align;
+    template <std::size_t byteN, bool align = true>
+    class alignas(align ? compute_align(byteN) : alignof(Byte_t)) BYTE_DATA {
+        Byte_t stack_[byteN]{};
+    public:
+        enum : std::size_t { e_size = byteN };
+
+        BYTE_DATA() noexcept = default;
+
+        ~BYTE_DATA() noexcept = default;
+
+        template <typename Ty_, typename = typename std::enable_if<!std::is_integral<Ty_>::value>::type>
+        BYTE_DATA(const Ty_& rhs) noexcept { // NOLINT
+            static_assert(std::is_trivially_copyable<Ty_>::value, "must be trivially copyable");
+            std::memset(stack_, 0, byteN);
+            std::memcpy(stack_, &rhs, sizeof(Ty_) < byteN ? sizeof(Ty_) : byteN);
+        }
+
+        template<typename Int, typename = typename std::enable_if<std::is_integral<Int>::value>::type>
+        BYTE_DATA(Int v) noexcept {  // NOLINT
+            std::memset(stack_, 0, byteN);
+            std::memcpy(stack_, &v, (std::min)(sizeof(Int), byteN));
+        }
+
+        Byte_t* data() noexcept { return stack_; }
+        const Byte_t* data() const noexcept { return stack_; }
+
+        std::size_t size() const noexcept {
+            return e_size;
+        }
+
+        bool operator==(const BYTE_DATA& rhs) const noexcept {
+            return std::memcmp(stack_, rhs.stack_, byteN) == 0;
+        }
+
+        bool operator!=(const BYTE_DATA& rhs) const noexcept {
+            return !(*this == rhs);
+        }
+
+        template <typename Ty_>
+        explicit operator Ty_() const noexcept {
+            static_assert(std::is_trivially_copyable<Ty_>::value, "must be trivially copyable");
+            Ty_ tmp{};
+            std::memcpy(&tmp, stack_, sizeof(Ty_) < byteN ? sizeof(Ty_) : byteN);
+            return tmp;
+        }
+
+        friend std::ostream& operator<<(std::ostream& os, const BYTE_DATA& v) {
+            for (std::size_t i = 0; i < byteN; ++i) {
+                const auto c = static_cast<unsigned char>(v.stack_[i]);
+                for (int b = 7; b >= 0; --b) {
+                    os << ((c >> b) & 1); // NOLINT
+                }
+            }
+            return os;
+        }
+
+        friend std::istream& operator>>(std::istream& is, BYTE_DATA& v) {
+            for (std::size_t i = 0; i < byteN; ++i) {
+                unsigned char c = 0;
+                for (int b = 7; b >= 0; --b) {
+                    char bit;
+                    is >> bit;
+                    if (bit == '1') {
+                        c |= (1u << b);
+                    } else if (bit != '0') {
+                        is.setstate(std::ios::failbit);
+                        return is;
+                    }
+                }
+                v.stack_[i] = static_cast<char>(c);
+            }
+            return is;
+        }
+    };
+
+    template <typename T, std::size_t _>
+    T byte_data_convert(const BYTE_DATA<_>& data) noexcept {
+        static_assert(
+            std::is_trivially_copyable<T>::value,
+            "T must be trivially copyable"
+        );
+        static_assert(
+            sizeof(T) <= _,
+            "size mismatch"
+        );
+
+        T out;
+        std::memcpy(&out, data.data(), _);
+        return out;
+    }
+
+    template <typename BDT, std::size_t _>
+    BDT byte_data_cast(const BYTE_DATA<_>& data) {
+        static_assert(
+            _ <= BDT::e_size,
+            "size mismatch"
+        );
+        if (BDT::e_size == _) return data;
+        BDT out{};
+
+        constexpr std::size_t copy_size =
+            BDT::e_size < _ ? BDT::e_size : _;
+
+        std::memcpy(out.data(), data.data(), copy_size);
+
+        return out;
+    }
+
+    template <typename BDT, std::size_t _>
+    BDT byte_data_force_cast(const BYTE_DATA<_>& data) {
+        if (BDT::e_size == _) return data;
+        BDT out{};
+
+        constexpr std::size_t copy_size =
+            BDT::e_size < _ ? BDT::e_size : _;
+
+        std::memcpy(out.data(), data.data(), copy_size);
+
+        return out;
+    }
+
+    template <typename T, std::size_t _>
+    T byte_data_force_convert(const BYTE_DATA<_>& data) noexcept {
+        T out{};
+        std::memcpy(&out, data.data(), (std::min)(_, sizeof(T)));
+        return out;
+    }
+
+    using BYTE = BYTE_DATA<1>;
+    using WORD = BYTE_DATA<2>;
+    using DWORD = BYTE_DATA<4>;
+    using QWORD = BYTE_DATA<8>;
+    using FLOAT = BYTE_DATA<4>;
+    using DOUBLE = BYTE_DATA<8>;
+}
+
+namespace ZUMTLib {
+    namespace Asm = ZUMTAsm;
+    namespace Tool = ZUMTTool;
+
+    auto self_maps = ZUMTLib_CFG_DEFAULT_SELF_MAPS;
+    auto self_cmdline = ZUMTLib_CFG_DEFAULT_SELF_CMDLINE;
+    auto bss_sign = ZUMTLib_CFG_DEFAULT_MODULE_BSS_SIGN;
+
+
+    using namespace ZUMTCfg;
+    using namespace ZUMTType;
+
+    namespace details {
+        inline String_t remove_spaces(const String_t& str) {
+            String_t result = str;
+            result.erase(
+                std::remove_if(
+                    result.begin(),
+                    result.end(),
+                    [](const unsigned char c) { return std::isspace(c); }
+                ),
+                result.end()
+            );
+            return result;
+        }
+
+        inline Address_t align_down(const Address_t x, const Address_t align) {
+            return x & ~(align - 1); // NOLINT
+        }
+
+        inline Address_t align_up(const Address_t x, const Address_t align) {
+            return (x + align - 1) & ~(align - 1); // NOLINT
+        }
     }
 
     struct BaseRange {
@@ -1415,7 +1571,6 @@ namespace ZUMTLib {
             Bytes_t& data,
             fn_asm_cfg asm_cfg = {}
         ) const {
-            ;
             return readTo(data.data(), data.size(), asm_cfg);
         }
 
@@ -1551,6 +1706,7 @@ namespace ZUMTLib {
         void** m_vfunc_ptr;
 
         VFunction() = default;
+
     public:
         VFunction(const Address_t vfunc_addr) {
             if (vfunc_addr == 0)
@@ -1686,6 +1842,7 @@ namespace ZUMTLib {
         void* m_osub{};
         bool m_hooked{};
         asm_cfg_t m_asm_cfg;
+
     public:
         void* osub() const noexcept {
             return m_osub;
@@ -1722,14 +1879,18 @@ namespace ZUMTLib {
             const VFunction& vf,
             fn_asm_cfg asm_cfg = {},
             const Proc_t* proc = nullptr
-        ) : m_proc(proc), m_vf(vf), m_asm_cfg(asm_cfg) {}
+        ) : m_proc(proc),
+            m_vf(vf),
+            m_asm_cfg(asm_cfg) {}
 
         VFuncHookRAII(
             const VFunction& vf,
             void* hsub,
             fn_asm_cfg asm_cfg = {},
             const Proc_t* proc = nullptr
-        ) : m_proc(proc), m_vf(vf), m_asm_cfg(asm_cfg) {
+        ) : m_proc(proc),
+            m_vf(vf),
+            m_asm_cfg(asm_cfg) {
             Hook(hsub);
         }
 
@@ -1743,6 +1904,7 @@ namespace ZUMTLib {
         void* m_osub{};
         bool m_hooked{};
         asm_cfg_t m_asm_cfg;
+
     public:
         void* osub() const noexcept {
             return m_osub;
@@ -1778,13 +1940,15 @@ namespace ZUMTLib {
         VFuncHookNoGuardRAII(
             const VFunction& vf,
             fn_asm_cfg asm_cfg = {}
-        ) : m_vf(vf), m_asm_cfg(asm_cfg) {}
+        ) : m_vf(vf),
+            m_asm_cfg(asm_cfg) {}
 
         VFuncHookNoGuardRAII(
             const VFunction& vf,
             void* hsub,
             fn_asm_cfg asm_cfg = {}
-        ) : m_vf(vf), m_asm_cfg(asm_cfg) {
+        ) : m_vf(vf),
+            m_asm_cfg(asm_cfg) {
             Hook(hsub);
         }
 
@@ -1795,6 +1959,7 @@ namespace ZUMTLib {
 
     class VTable {
         void** m_vtable;
+
     public:
         VTable(const Address_t vtable_addr) {
             if (vtable_addr == 0)
@@ -2229,6 +2394,38 @@ namespace ZUMTLib {
 
         inline Offset_t operator""_Offset(const unsigned long long address) {
             return address;
+        }
+
+        inline BYTE operator""_BYTE(const unsigned long long byte) {
+            return byte;
+        }
+
+        inline WORD operator""_WORD(const unsigned long long word_) {
+            return word_;
+        }
+
+        inline DWORD operator""_DWORD(const unsigned long long dword_) {
+            return dword_;
+        }
+
+        inline QWORD operator""_QWORD(const unsigned long long qword_) {
+            return qword_;
+        }
+
+        constexpr std::size_t operator""_B(unsigned long long v) {
+            return v;
+        }
+
+        constexpr std::size_t operator""_KB(unsigned long long v) {
+            return v * 1024ULL;
+        }
+
+        constexpr std::size_t operator""_MB(unsigned long long v) {
+            return v * 1024ULL * 1024ULL;
+        }
+
+        constexpr std::size_t operator""_GB(unsigned long long v) {
+            return v * 1024ULL * 1024ULL * 1024ULL;
         }
     }
 
